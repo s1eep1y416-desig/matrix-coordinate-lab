@@ -118,7 +118,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-vi
 .matrix-readout span { min-width: 28px; text-align: right; }
 .matrix-strip p { margin: 0; color: #777d88; font-size: .67rem; line-height: 1.5; }
 
-.control-panel { display: flex; flex-direction: column; gap: 12px; }
+.control-panel { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 84px; max-height: calc(100dvh - 102px); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: #a9c69a transparent; }
 .panel-section, .challenge-card { padding: 17px; border-radius: 17px; background: var(--surface); border: 1px solid rgba(223,226,231,.78); }
 .section-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .section-heading.compact { margin-bottom: 12px; }
@@ -186,7 +186,7 @@ body.scrubbing-value, body.scrubbing-value * { cursor: ew-resize !important; use
 
 @media (max-width: 1180px) {
   .workspace { grid-template-columns: minmax(0,1fr); }
-  .control-panel { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; }
+  .control-panel { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; position: static; max-height: none; overflow: visible; }
   .transform-section { grid-column: 1 / -1; }
   .challenge-card { margin-top: 0; }
   .canvas-wrap { min-height: 520px; }
