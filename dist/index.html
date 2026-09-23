@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="在可旋转的三维空间中学习坐标系、齐次矩阵和坐标变换。" />
-    <meta name="theme-color" content="#101217" />
+    <meta name="theme-color" content="#0b0c09" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23101217'/%3E%3Cpath d='M18 46V18m0 28 30-12M18 46l17 8' fill='none' stroke='%23b7f34b' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
     <title>三维矩阵 · 坐标实验室</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -16,55 +16,13 @@
         <span>三维矩阵 · 坐标实验室</span>
         <em>3D</em>
       </a>
-      <div class="topbar-progress" aria-label="课程进度">
-        <span id="progressLabel">第 1 / 4 节</span>
-        <span class="progress-track"><span id="progressBar"></span></span>
-      </div>
+      <span class="topbar-note">6-DOF · FRAME TREE · MATRIX</span>
       <button class="icon-button" id="resetAll" type="button" aria-label="重置实验" title="重置实验">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
       </button>
     </header>
 
     <main id="workspace" class="workspace">
-      <aside class="lesson-rail" aria-label="课程与坐标系列表">
-        <div class="rail-heading">
-          <span>学习路径</span>
-          <span class="rail-time">约 15 分钟</span>
-        </div>
-        <nav class="lesson-list" aria-label="三维坐标课程">
-          <button class="lesson-item active" data-lesson="vector" type="button">
-            <span class="lesson-index">01</span><span><strong>三维向量</strong><small>多出来的 z 轴</small></span><span class="lesson-state" aria-hidden="true"></span>
-          </button>
-          <button class="lesson-item" data-lesson="frame" type="button">
-            <span class="lesson-index">02</span><span><strong>父子坐标系</strong><small>建立空间层级</small></span><span class="lesson-state" aria-hidden="true"></span>
-          </button>
-          <button class="lesson-item" data-lesson="rotation" type="button">
-            <span class="lesson-index">03</span><span><strong>三轴旋转</strong><small>滚转、俯仰与偏航</small></span><span class="lesson-state" aria-hidden="true"></span>
-          </button>
-          <button class="lesson-item" data-lesson="convert" type="button">
-            <span class="lesson-index">04</span><span><strong>坐标换算</strong><small>局部坐标到目标系</small></span><span class="lesson-state" aria-hidden="true"></span>
-          </button>
-        </nav>
-
-        <section class="frame-browser" aria-labelledby="frameBrowserTitle">
-          <div class="frame-browser-head">
-            <div><span class="eyebrow">场景</span><h2 id="frameBrowserTitle">坐标系</h2></div>
-            <button class="add-frame-button" id="addFrame" type="button" aria-label="添加坐标系">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加</span>
-            </button>
-          </div>
-          <p class="frame-help">添加时默认成为当前坐标系的子级</p>
-          <div class="frame-list" id="frameList" role="listbox" aria-label="已添加的坐标系"></div>
-        </section>
-
-        <section class="concept-card" aria-live="polite">
-          <span class="eyebrow" id="lessonKicker">第 1 节 · 空间</span>
-          <h1 id="lessonTitle">从平面走进空间</h1>
-          <p id="lessonBody">三维点写作 <b>p = (x, y, z)</b>。用中键旋转视角，再用左键拖动绿色空间点。</p>
-          <div class="concept-note"><span aria-hidden="true">↳</span><p id="lessonNote">红色是 x，绿色是 y，蓝色是 z。颜色在所有坐标系中保持一致。</p></div>
-        </section>
-      </aside>
-
       <section class="lab-panel" aria-label="三维坐标变换实验区">
         <div class="lab-heading">
           <div><span class="eyebrow">三维场景</span><h2>在多个坐标系之间换算</h2></div>
@@ -97,6 +55,16 @@
       </section>
 
       <aside class="control-panel" aria-label="坐标变换控制台">
+        <section class="frame-browser" aria-labelledby="frameBrowserTitle">
+          <div class="frame-browser-head">
+            <div><span class="eyebrow">场景层级</span><h2 id="frameBrowserTitle">坐标系</h2></div>
+            <button class="add-frame-button" id="addFrame" type="button" aria-label="添加坐标系">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加</span>
+            </button>
+          </div>
+          <p class="frame-help">选中父级后添加；左键可直接拖动子坐标系原点</p>
+          <div class="frame-list" id="frameList" role="listbox" aria-label="已添加的坐标系"></div>
+        </section>
         <section class="panel-section source-section">
           <div class="section-heading"><div><span class="eyebrow">换算路径</span><h2>坐标系选择</h2></div><span class="frame-color" id="selectedColor" aria-hidden="true"></span></div>
           <div class="select-pair">
@@ -126,17 +94,27 @@
               </div>
             </div>
             <div class="control-group">
-              <div class="control-label"><span>旋转</span><small>角度 °</small></div>
-              <div class="triple-inputs">
-                <label><span>Rx</span><input id="rx" inputmode="decimal" value="0" /></label>
-                <label><span>Ry</span><input id="ry" inputmode="decimal" value="0" /></label>
-                <label><span>Rz</span><input id="rz" inputmode="decimal" value="30" /></label>
+              <div class="control-label"><span>旋转</span><small>左右拖动数值 · °</small></div>
+              <div class="triple-inputs rotation-inputs">
+                <label><span>Rx</span><input id="rx" inputmode="decimal" value="0" title="左右拖动调节，点击后可输入" /></label>
+                <label><span>Ry</span><input id="ry" inputmode="decimal" value="0" title="左右拖动调节，点击后可输入" /></label>
+                <label><span>Rz</span><input id="rz" inputmode="decimal" value="30" title="左右拖动调节，点击后可输入" /></label>
               </div>
             </div>
             <div class="preset-row" role="group" aria-label="姿态预设">
               <button data-preset="z45" type="button">绕 Z 45°</button>
               <button data-preset="tilt" type="button">空间倾斜</button>
               <button data-preset="identity" type="button">清零旋转</button>
+            </div>
+            <div class="dof-panel" aria-labelledby="dofTitle">
+              <div class="dof-heading"><div><span class="eyebrow">运动约束</span><strong id="dofTitle">自由度</strong></div><span id="dofSummary">6 / 6 自由</span></div>
+              <div class="dof-grid" id="dofGrid" role="group" aria-label="选择要设置的自由度"></div>
+              <div class="dof-editor">
+                <label class="lock-control"><input id="dofLocked" type="checkbox" /><span>锁定当前自由度</span></label>
+                <label><span>下限</span><input id="dofMin" inputmode="decimal" /></label>
+                <label><span>上限</span><input id="dofMax" inputmode="decimal" /></label>
+              </div>
+              <p class="dof-note" id="dofNote">X 可在 −50 到 50 之间移动</p>
             </div>
           </fieldset>
         </section>
