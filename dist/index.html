@@ -36,7 +36,7 @@
             <span class="lesson-index">01</span><span><strong>三维向量</strong><small>多出来的 z 轴</small></span><span class="lesson-state" aria-hidden="true"></span>
           </button>
           <button class="lesson-item" data-lesson="frame" type="button">
-            <span class="lesson-index">02</span><span><strong>坐标系</strong><small>同一点，多种描述</small></span><span class="lesson-state" aria-hidden="true"></span>
+            <span class="lesson-index">02</span><span><strong>父子坐标系</strong><small>建立空间层级</small></span><span class="lesson-state" aria-hidden="true"></span>
           </button>
           <button class="lesson-item" data-lesson="rotation" type="button">
             <span class="lesson-index">03</span><span><strong>三轴旋转</strong><small>滚转、俯仰与偏航</small></span><span class="lesson-state" aria-hidden="true"></span>
@@ -53,14 +53,14 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>添加</span>
             </button>
           </div>
-          <p class="frame-help">每个坐标系都相对 World 定义</p>
+          <p class="frame-help">添加时默认成为当前坐标系的子级</p>
           <div class="frame-list" id="frameList" role="listbox" aria-label="已添加的坐标系"></div>
         </section>
 
         <section class="concept-card" aria-live="polite">
           <span class="eyebrow" id="lessonKicker">第 1 节 · 空间</span>
           <h1 id="lessonTitle">从平面走进空间</h1>
-          <p id="lessonBody">三维点写作 <b>p = (x, y, z)</b>。拖动画布旋转视角，先找到红、绿、蓝三条坐标轴。</p>
+          <p id="lessonBody">三维点写作 <b>p = (x, y, z)</b>。用中键旋转视角，再用左键拖动绿色空间点。</p>
           <div class="concept-note"><span aria-hidden="true">↳</span><p id="lessonNote">红色是 x，绿色是 y，蓝色是 z。颜色在所有坐标系中保持一致。</p></div>
         </section>
       </aside>
@@ -75,9 +75,9 @@
         </div>
 
         <div class="canvas-wrap" id="canvasWrap">
-          <canvas id="sceneCanvas" tabindex="0" aria-label="可旋转的三维坐标场景。按住并拖动旋转视角，滚轮缩放。"></canvas>
+          <canvas id="sceneCanvas" tabindex="0" aria-label="三维坐标场景。鼠标中键拖动旋转视角，左键拖动子坐标系原点或绿色向量端点，滚轮缩放。"></canvas>
           <div class="axis-legend" aria-hidden="true"><span class="x-axis">X</span><span class="y-axis">Y</span><span class="z-axis">Z</span></div>
-          <div class="view-hint" id="viewHint"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10-3 3 3 3M16 10l3 3-3 3M12 5v14"/></svg>拖动旋转 · 滚轮缩放</div>
+          <div class="view-hint" id="viewHint"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10-3 3 3 3M16 10l3 3-3 3M12 5v14"/></svg>中键旋转 · 左键拖动原点/向量 · 滚轮缩放</div>
           <div class="scene-readout"><span>源</span><strong id="sceneSource">坐标系 A</strong><i>→</i><span>目标</span><strong id="sceneTarget">World</strong></div>
         </div>
 
@@ -92,7 +92,7 @@
         <div class="matrix-strip">
           <div><span class="eyebrow">齐次变换矩阵</span><strong id="matrixTitle">T<sub>World←A</sub></strong></div>
           <div class="matrix-readout" id="matrixReadout" aria-label="四乘四齐次变换矩阵"></div>
-          <p>前三列描述旋转，最后一列描述平移。</p>
+          <p>沿父级链逐层相乘，得到相对 World 的最终矩阵。</p>
         </div>
       </section>
 
@@ -112,7 +112,11 @@
             <button class="delete-frame" id="deleteFrame" type="button">删除</button>
           </div>
           <fieldset id="frameEditor">
-            <legend>相对 World 的位置与旋转</legend>
+            <legend>位置与旋转都相对于父坐标系</legend>
+            <div class="parent-control">
+              <label for="parentFrame"><span>父坐标系</span><select id="parentFrame"></select></label>
+              <p id="hierarchyPath">World → 坐标系 A</p>
+            </div>
             <div class="control-group">
               <div class="control-label"><span>位置</span><small>单位</small></div>
               <div class="triple-inputs">

@@ -66,7 +66,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-vi
 .add-frame-button svg { width: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .frame-help { margin: 7px 0 11px; color: var(--faint); font-size: .69rem; }
 .frame-list { display: flex; flex-direction: column; gap: 5px; }
-.frame-list button { width: 100%; display: grid; grid-template-columns: 9px 1fr auto; gap: 8px; align-items: center; padding: 9px 10px; border: 1px solid transparent; border-radius: 9px; background: #f5f6f8; cursor: pointer; text-align: left; }
+.frame-list button { width: 100%; display: grid; grid-template-columns: 9px 1fr auto; gap: 8px; align-items: center; padding: 9px 10px 9px calc(10px + var(--depth, 0) * 14px); border: 1px solid transparent; border-radius: 9px; background: #f5f6f8; cursor: pointer; text-align: left; }
 .frame-list button:hover { border-color: #cdd1d8; }
 .frame-list button.selected { border-color: var(--ink); background: #fff; box-shadow: 0 4px 12px rgba(23,25,31,.06); }
 .frame-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--frame-color); }
@@ -93,8 +93,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-vi
 .text-button:hover { color: var(--ink); background: #e6e8ec; }
 .text-button.dark:hover { color: #fff; background: #292d35; }
 .canvas-wrap { position: relative; flex: 1; min-height: 490px; overflow: hidden; border: 1px solid #2c3038; border-radius: 14px; background: radial-gradient(circle at 50% 43%,#1b1f27,#0c0e12 74%); }
-#sceneCanvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-#sceneCanvas.dragging { cursor: grabbing; }
+#sceneCanvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+#sceneCanvas.rotating { cursor: grabbing; }
+#sceneCanvas.moving, #sceneCanvas.hovering { cursor: move; }
 .axis-legend { position: absolute; top: 13px; left: 14px; display: flex; gap: 6px; }
 .axis-legend span { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; font: 800 .65rem/1 ui-monospace, SFMono-Regular, monospace; color: #101217; }
 .x-axis { background: var(--x); }.y-axis { background: var(--y); }.z-axis { background: var(--z); }
@@ -133,6 +134,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-vi
 fieldset { margin: 0; padding: 0; border: 0; }
 fieldset:disabled { opacity: .45; }
 fieldset legend { width: 100%; margin-bottom: 13px; color: var(--faint); font-size: .67rem; }
+.parent-control { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: end; margin-bottom: 14px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+.parent-control label > span { display: block; margin-bottom: 6px; color: var(--muted); font-size: .72rem; font-weight: 700; }
+.parent-control select { width: 100%; height: 37px; padding: 0 28px 0 9px; border: 1px solid var(--line); border-radius: 9px; background: #f8f9fa; font-size: .74rem; }
+.parent-control p { max-width: 120px; margin: 0 0 9px; overflow: hidden; color: var(--faint); font: 500 .63rem/1.35 ui-monospace,SFMono-Regular,monospace; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .control-group + .control-group { margin-top: 13px; }
 .control-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
 .control-label span { color: var(--muted); font-size: .72rem; font-weight: 700; }.control-label small { color: var(--faint); font-size: .65rem; }
