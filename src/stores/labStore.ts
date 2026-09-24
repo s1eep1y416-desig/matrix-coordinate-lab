@@ -3,9 +3,10 @@ import { create } from 'zustand';
 import { eulerFromQuaternion, quaternionFromEuler, type EulerOrder } from '../math/euler';
 import { composePoses, identityPose, inversePose, makePose, relativePose, transformPoint, type Pose } from '../math/transform';
 import type { JointAngles } from '../math/kinematics';
+import { ikStep, solveIK } from '../math/inverseKinematics';
 
 export type DofKey = 'tx' | 'ty' | 'tz' | 'rx' | 'ry' | 'rz';
-export type LabMode = 'frames' | 'rotation' | 'chain' | 'fk';
+export type LabMode = 'frames' | 'rotation' | 'chain' | 'fk' | 'ik' | 'pinocchio';
 export type PointReference = 'world' | 'frame';
 export type EulerOrderBehavior = 'pose' | 'angles';
 
@@ -82,6 +83,10 @@ interface LabState {
   rotationY: number;
   rotationSense: 'active' | 'passive';
   fkStep: number;
+  ikTarget: Vector3;
+  ikDamping: number;
+  ikIterations: number;
+  pinStep: number;
   setMode: (mode: LabMode) => void;
   selectFrame: (id: string) => void;
   setSource: (id: string) => void;
@@ -104,6 +109,12 @@ interface LabState {
   setRotationDemo: (axis: 'X' | 'Y', value: number) => void;
   setRotationSense: (sense: 'active' | 'passive') => void;
   setFkStep: (step: number) => void;
+  setIkTarget: (target: Vector3) => void;
+  setIkTargetCoordinate: (axis: 0 | 1 | 2, value: number) => number;
+  setIkDamping: (value: number) => void;
+  stepIK: () => void;
+  solveIK: () => void;
+  setPinStep: (step: number) => void;
   reset: () => void;
 }
 
@@ -112,6 +123,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose',
   pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45],
   rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3,
+  ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5,
   setMode: (mode) => {
     if (mode === 'chain' && !get().frames.some((frame) => frame.id === 'B')) {
       const B: FrameNode = { id: 'B', name: 'Frame B', parentId: 'A', pose: makePose(new Vector3(1.25, 0.15, 0.55), quaternionFromEuler([20, -10, 18], get().eulerOrder)), constraints: frameConstraints(), visible: true };
@@ -219,10 +231,24 @@ export const useLabStore = create<LabState>((set, get) => ({
   setRobotAngle: (axis, value) => set((state) => {
     const robotAngles = [...state.robotAngles] as JointAngles;
     robotAngles[axis] = clamp(value, -180, 180);
-    return { robotAngles };
+    return { robotAngles, ikIterations: state.mode === 'ik' ? 0 : state.ikIterations };
   }),
   setRotationDemo: (axis, value) => set({ [axis === 'X' ? 'rotationX' : 'rotationY']: clamp(value, -180, 180) }),
   setRotationSense: (rotationSense) => set({ rotationSense }),
   setFkStep: (fkStep) => set({ fkStep: clamp(Math.round(fkStep), 0, 3) }),
-  reset: () => set({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3 }),
+  setIkTarget: (ikTarget) => set({ ikTarget: ikTarget.clone(), ikIterations: 0 }),
+  setIkTargetCoordinate: (axis, value) => {
+    if (!Number.isFinite(value)) return 0;
+    const ikTarget = get().ikTarget.clone().setComponent(axis, clamp(value, -3.2, 3.2));
+    set({ ikTarget, ikIterations: 0 });
+    return ikTarget.getComponent(axis);
+  },
+  setIkDamping: (value) => set({ ikDamping: clamp(value, 0.001, 1) }),
+  stepIK: () => set((state) => ({ robotAngles: ikStep(state.robotAngles, state.ikTarget, state.ikDamping).angles, ikIterations: state.ikIterations + 1 })),
+  solveIK: () => set((state) => {
+    const result = solveIK(state.robotAngles, state.ikTarget, state.ikDamping);
+    return { robotAngles: result.angles, ikIterations: state.ikIterations + result.iterations };
+  }),
+  setPinStep: (pinStep) => set({ pinStep: clamp(Math.round(pinStep), 0, 5) }),
+  reset: () => set({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5 }),
 }));

@@ -3,6 +3,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three';
 import { EULER_ORDERS, eulerFromQuaternion, quaternionFromEuler } from './euler';
 import { axisAngleFromQuaternion, quaternionFromAxisAngle, sameOrientation } from './quaternion';
 import { forwardKinematics, LINK_LENGTHS } from './kinematics';
+import { finiteDifferenceJacobian, ikStep, positionJacobian, solveIK } from './inverseKinematics';
 import { rotationAbout, rotationProduct, validateRotation, validateRotationMatrix } from './rotation';
 import { composePoses, identityPose, inversePose, inverseTransformPoint, makePose, poseMatrix, relativePose, transformPoint, validateHomogeneous } from './transform';
 
@@ -89,5 +90,26 @@ describe('3-link forward kinematics', () => {
     const fk = forwardKinematics([90, 0, 0]);
     expectVector(fk.T_base_tool.position, new Vector3(0, 3.05, 0));
     expectVector(fk.jointPositions[1], new Vector3(0, 1.25, 0));
+  });
+});
+
+describe('damped least-squares inverse kinematics', () => {
+  it('matches the analytic position Jacobian to finite differences', () => {
+    const analytic = positionJacobian([28, -34, 51]);
+    const numeric = finiteDifferenceJacobian([28, -34, 51]);
+    analytic.flat().forEach((value, index) => expect(value).toBeCloseTo(numeric.flat()[index], 5));
+  });
+
+  it('reduces Cartesian error in one accepted step', () => {
+    const result = ikStep([10, -20, 15], new Vector3(1.8, 0.9, 0.65));
+    expect(result.acceptedScale).toBeGreaterThan(0);
+    expect(result.nextErrorNorm).toBeLessThan(result.errorNorm);
+  });
+
+  it('converges to a reachable target position', () => {
+    const target = forwardKinematics([42, -55, 68]).T_base_tool.position;
+    const result = solveIK([0, -10, 10], target, 0.06);
+    expect(result.converged).toBe(true);
+    expect(target.distanceTo(forwardKinematics(result.angles).T_base_tool.position)).toBeLessThan(1e-4);
   });
 });

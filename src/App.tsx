@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Quaternion, Vector3 } from 'three';
+import { Matrix4, Quaternion, Vector3 } from 'three';
 import { EULER_ORDERS, eulerFromQuaternion, isNearGimbalLock, type EulerOrder } from './math/euler';
 import { forwardKinematics } from './math/kinematics';
+import { jacobianManipulability, positionJacobian } from './math/inverseKinematics';
 import { axisAngleFromQuaternion } from './math/quaternion';
 import { rotationAbout, rotationMatrix, rotationProduct, validateRotation } from './math/rotation';
 import { inversePose, inverseTransformPoint, poseMatrix, transformPoint, validateHomogeneous } from './math/transform';
@@ -17,6 +18,8 @@ const NAV: { id: LabMode; label: string; short: string }[] = [
   { id: 'rotation', label: '旋转矩阵', short: 'Rotation' },
   { id: 'chain', label: '变换链', short: 'Transforms' },
   { id: 'fk', label: '3-Link FK', short: 'Kinematics' },
+  { id: 'ik', label: '逆运动学', short: 'IK Solver' },
+  { id: 'pinocchio', label: 'Pinocchio', short: 'Workflow' },
 ];
 const labels = ['X', 'Y', 'Z'] as const;
 const dofKeys: DofKey[] = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz'];
@@ -197,6 +200,89 @@ function FKControls() {
   </>;
 }
 
+function IKControls() {
+  const { robotAngles, setRobotAngle, ikTarget, setIkTargetCoordinate, ikDamping, setIkDamping, stepIK, solveIK, ikIterations } = useLabStore();
+  return <>
+    <section className="control-card"><PaneTitle eyebrow="TARGET IN BASE" title="拖动或输入目标点" aside={<span className="subtle-badge">position IK</span>} />
+      <div className="three-fields">{labels.map((axis, index) => <NumberField key={axis} label={axis} unit="m" value={ikTarget.getComponent(index)} min={-3.2} max={3.2} onCommit={(value) => setIkTargetCoordinate(index as 0 | 1 | 2, value)} />)}</div>
+      <div className="preset-row"><button onClick={() => useLabStore.getState().setIkTarget(new Vector3(1.9, .8, .7))}>目标 A</button><button onClick={() => useLabStore.getState().setIkTarget(new Vector3(1.25, -1.1, -.55))}>目标 B</button><button onClick={() => useLabStore.getState().setIkTarget(new Vector3(3.4, 0, 0))}>不可达点</button></div>
+      <p className="fine-print">左键可直接拖动绿色 Target；球壳外的目标无法收敛，用于观察残差和可达性。</p>
+    </section>
+    <section className="control-card"><PaneTitle eyebrow="DAMPED LEAST SQUARES" title="Jacobian 迭代" />
+      <div className="slider-row"><strong>λ</strong><input aria-label="阻尼系数" type="range" min="0.001" max="0.5" step="0.001" value={ikDamping} onChange={(event) => setIkDamping(Number(event.target.value))} /><NumberField label="阻尼" value={ikDamping} onCommit={(value) => { setIkDamping(value); return Math.max(.001, Math.min(1, value)); }} /></div>
+      <div className="solver-actions"><button onClick={stepIK}>单步迭代</button><button className="primary-action" onClick={solveIK}>求解到收敛</button></div>
+      <div className="inline-result"><span>累计迭代</span><strong>{ikIterations}</strong></div>
+      <p className="fine-print"><Formula tex="\Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" />。阻尼抑制奇异位形附近的关节跳变；线搜索只接受让误差下降的步长。</p>
+    </section>
+    <section className="control-card"><PaneTitle eyebrow="INITIAL / CURRENT q" title="关节角" />
+      {robotAngles.map((angle, index) => <div className="slider-row" key={index}><strong>q{index + 1}</strong><input aria-label={`IK 关节 ${index + 1}`} type="range" min="-180" max="180" value={angle} onChange={(event) => setRobotAngle(index as 0 | 1 | 2, Number(event.target.value))} /><NumberField label="角度" unit="°" value={angle} onCommit={(value) => { setRobotAngle(index as 0 | 1 | 2, value); return Math.max(-180, Math.min(180, value)); }} /></div>)}
+    </section>
+  </>;
+}
+
+const PIN_STEPS = [
+  ['01', '读取 URDF', 'buildModelFromUrdf() 建立关节、Link 与 Frame 拓扑'],
+  ['02', '建立数据', 'model.createData() 分配运动学计算缓存'],
+  ['03', '输入 q', '关节角从控制器进入模型，单位统一为 rad'],
+  ['04', '执行 FK', 'forwardKinematics(model, data, q) 递推各 Link 位姿'],
+  ['05', '更新 Frame', 'updateFramePlacements(model, data) 得到 data.oMf'],
+  ['06', '输出与显示', '读取 end_link 的 SE(3)，同步末端数值与 3D 场景'],
+] as const;
+
+function PinocchioControls() {
+  const { pinStep, setPinStep, robotAngles, setRobotAngle } = useLabStore();
+  return <>
+    <section className="control-card"><PaneTitle eyebrow="DOCUMENT WORKFLOW" title="Pinocchio FK 数据流" />
+      <div className="pin-step-list">{PIN_STEPS.map((step, index) => <button key={step[0]} className={pinStep === index ? 'active' : pinStep > index ? 'done' : ''} onClick={() => setPinStep(index)}><span>{step[0]}</span><strong>{step[1]}</strong><small>{step[2]}</small></button>)}</div>
+      <p className="fine-print">逐步点击，观察“关节角 → Pinocchio FK → 末端位姿 + 可视化”的数据怎样流动。</p>
+    </section>
+    <section className="control-card"><PaneTitle eyebrow="q · degrees in UI" title="输入关节配置" />
+      <div className="three-fields">{robotAngles.map((angle, index) => <NumberField key={index} label={`q${index + 1}`} unit="°" scrub step={.5} value={angle} onCommit={(value) => { setRobotAngle(index as 0 | 1 | 2, value); return Math.max(-180, Math.min(180, value)); }} />)}</div>
+      <button className="wide-action" onClick={() => { setRobotAngle(0, 45); setRobotAngle(1, -30); setRobotAngle(2, 15); setPinStep(5); }}>载入文档示例 45, −30, 15</button>
+      <p className="fine-print">界面便于学习而使用度；传入 Pinocchio 前转换为弧度。文档的 6 轴示例还包含 q4–q6，本实验先展示相同的 3 轴核心链路。</p>
+    </section>
+  </>;
+}
+
+function matrixFromJacobian(rows: ReturnType<typeof positionJacobian>): Matrix4 {
+  return new Matrix4().set(rows[0][0], rows[0][1], rows[0][2], 0, rows[1][0], rows[1][1], rows[1][2], 0, rows[2][0], rows[2][1], rows[2][2], 0, 0, 0, 0, 1);
+}
+
+function IKResults() {
+  const { robotAngles, ikTarget, ikIterations } = useLabStore();
+  const fk = useMemo(() => forwardKinematics(robotAngles), [robotAngles]);
+  const jacobian = positionJacobian(robotAngles);
+  const error = ikTarget.clone().sub(fk.T_base_tool.position);
+  const errorNorm = error.length();
+  const reachable = ikTarget.length() <= 3.05 + 1e-8;
+  const manipulability = jacobianManipulability(jacobian);
+  const converged = errorNorm < 1e-3;
+  return <div className="results-stack">
+    <div className="result-intro"><span className="eyebrow">INVERSE KINEMATICS · POSITION</span><h2>目标位姿 → 关节角</h2><p>绿色点是目标，金色机械臂是当前解；误差线会随每次 Jacobian 迭代缩短。</p></div>
+    <div className="equation-strip"><Formula tex="e=p_{target}-p(q),\quad \Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" /><span>DLS + 下降线搜索</span></div>
+    <div className="readout-grid"><VectorReadout label="目标位置 · m" values={ikTarget.toArray()} /><VectorReadout label="当前末端 · m" values={fk.T_base_tool.position.toArray()} /><VectorReadout label="Cartesian error · m" values={error.toArray()} /><VectorReadout label="当前关节角 · °" values={robotAngles} unit="°" /></div>
+    <div className="validation-line"><span className={converged ? 'good' : 'warn'}>● {converged ? '已收敛' : reachable ? '等待迭代' : '目标超出最大臂展'}</span><span>‖e‖ = {formatValue(errorNorm)} m</span><span>|det(J)| = {formatValue(manipulability)}</span><span>迭代 {ikIterations}</span></div>
+    <div className="matrix-layout"><MatrixView matrix={matrixFromJacobian(jacobian)} size={3} label="J_v(q)" /><MatrixView matrix={poseMatrix(fk.T_base_tool)} label="{}^{base}T_{tool}(q)" /></div>
+    <div className="teaching-band"><strong>为什么这里只有位置 IK？</strong><span>3 个关节只有 3 个自由度，可用 3×3 的位置 Jacobian 匹配 x/y/z；文档中的 6 轴 reBot 使用 <Formula tex="\log_6(T_{current}^{-1}T_{target})" /> 得到旋转 + 平移的 6D SE(3) 误差。</span></div>
+  </div>;
+}
+
+function PinocchioResults() {
+  const { robotAngles, pinStep, eulerOrder } = useLabStore();
+  const fk = useMemo(() => forwardKinematics(robotAngles), [robotAngles]);
+  const q = fk.T_base_tool.quaternion;
+  const euler = eulerFromQuaternion(q, eulerOrder);
+  return <div className="results-stack">
+    <div className="result-intro"><span className="eyebrow">PINOCCHIO × URDF × SE(3)</span><h2>{PIN_STEPS[pinStep][1]}</h2><p>{PIN_STEPS[pinStep][2]}</p></div>
+    <div className="pin-pipeline">{PIN_STEPS.map((step, index) => <button key={step[0]} className={index === pinStep ? 'active' : index < pinStep ? 'done' : ''} onClick={() => useLabStore.getState().setPinStep(index)}><span>{step[0]}</span><strong>{step[1]}</strong></button>)}</div>
+    <div className="equation-strip"><Formula tex="q\;\longrightarrow\;\mathrm{FK}\;\longrightarrow\;{}^{world}T_{end\_link}\in SE(3)" /><span>数学结果与 3D 场景共用同一份 Pose</span></div>
+    <div className="matrix-layout"><MatrixView matrix={poseMatrix(fk.T_base_tool)} label="data.oMf[\mathrm{end\_link}]" /><MatrixView matrix={rotationMatrix(q)} size={3} label="R_{end\_link}" /></div>
+    <div className="readout-grid"><VectorReadout label="q · rad (Pinocchio 输入)" values={robotAngles.map((value) => value * Math.PI / 180)} /><VectorReadout label="translation · m" values={fk.T_base_tool.position.toArray()} /><VectorReadout label={`${eulerOrder} Euler · °`} values={euler} unit="°" /><VectorReadout label="Quaternion [x, y, z, w]" values={[q.x, q.y, q.z, q.w]} /></div>
+    <div className="api-map"><div><code>pin.buildModelFromUrdf()</code><span>URDF → Model</span></div><div><code>pin.forwardKinematics()</code><span>q → Link placements</span></div><div><code>pin.updateFramePlacements()</code><span>Link → Frame placements</span></div><div><code>data.oMf[frame_id]</code><span>读取世界到末端的 SE(3)</span></div></div>
+    <div className="teaching-band"><strong>与文档示例的关系</strong><span>本页在浏览器中复现同一套数学与数据流；真实 Python 工程由 Pinocchio 计算，MeshCat 负责显示。下一步接入 reBot URDF 后，可把当前 3-Link 模型替换为 6 轴模型，并让 IK 同时求位置与方向。</span></div>
+  </div>;
+}
+
 function FrameResults() {
   const { frames, selectedFrameId, sourceId, targetId, eulerOrder, pointWorld, mode } = useLabStore();
   const T_W_selected = worldPoseFor(frames, selectedFrameId);
@@ -286,11 +372,11 @@ export default function App() {
       <nav className="mode-nav" aria-label="学习模块">{NAV.map((item, index) => <button key={item.id} className={mode === item.id ? 'active' : ''} onClick={() => setMode(item.id)}><small>0{index + 1}</small>{item.label}</button>)}</nav>
       <button className="reset-button" onClick={reset} title="重置全部场景">重置</button></header>
     <main className="workspace">
-      <section className="visual-workspace"><div className="scene-heading"><div><span className="eyebrow">INTERACTIVE 3D</span><h1>{NAV.find((item) => item.id === mode)?.label}</h1></div><span className="heading-note">{mode === 'fk' ? '拖动关节角，看连杆与矩阵一起运动' : mode === 'rotation' ? '调节 Rx、Ry，对比旋转次序与主动 / 被动视角' : '拖动场景中的坐标系，观察数学如何改变'}</span></div><Scene />
-        {mode === 'rotation' ? <RotationResults /> : mode === 'fk' ? <FKResults /> : <FrameResults />}
+      <section className="visual-workspace"><div className="scene-heading"><div><span className="eyebrow">INTERACTIVE 3D</span><h1>{NAV.find((item) => item.id === mode)?.label}</h1></div><span className="heading-note">{mode === 'ik' ? '拖动目标点，用 Jacobian 逐步逼近' : mode === 'pinocchio' ? '沿数据流查看 URDF、FK、SE(3) 与可视化' : mode === 'fk' ? '拖动关节角，看连杆与矩阵一起运动' : mode === 'rotation' ? '调节 Rx、Ry，对比旋转次序与主动 / 被动视角' : '拖动场景中的坐标系，观察数学如何改变'}</span></div><Scene />
+        {mode === 'rotation' ? <RotationResults /> : mode === 'fk' ? <FKResults /> : mode === 'ik' ? <IKResults /> : mode === 'pinocchio' ? <PinocchioResults /> : <FrameResults />}
       </section>
       <aside className="control-panel" aria-label="实验操作栏"><div className="control-heading"><span className="eyebrow">CONTROLS</span><strong>实验操作</strong><span>{NAV.find((item) => item.id === mode)?.short}</span></div>
-        {mode === 'rotation' ? <RotationControls /> : mode === 'fk' ? <FKControls /> : <><FrameControls />{mode === 'chain' && <TransformControls />}</>}
+        {mode === 'rotation' ? <RotationControls /> : mode === 'fk' ? <FKControls /> : mode === 'ik' ? <IKControls /> : mode === 'pinocchio' ? <PinocchioControls /> : <><FrameControls />{mode === 'chain' && <TransformControls />}</>}
       </aside>
     </main>
   </div>;

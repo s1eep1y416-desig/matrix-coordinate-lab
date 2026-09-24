@@ -3,12 +3,13 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Line, OrbitControls } from '@react-three/drei';
 import { Group, MOUSE, Plane, Quaternion, Vector3 } from 'three';
 import { rotationAbout, rotationProduct } from '../math/rotation';
+import { forwardKinematics } from '../math/kinematics';
 import { identityPose, makePose } from '../math/transform';
 import { useLabStore, worldPoseFor } from '../stores/labStore';
 import { CoordinateFrame, SceneLabel } from './CoordinateFrame';
 import { Robot } from './Robot';
 
-function PointMarker({ point, onMove }: { point: Vector3; onMove: (point: Vector3) => void }) {
+function PointMarker({ point, onMove, label = 'Point P', color = '#b9ee72' }: { point: Vector3; onMove: (point: Vector3) => void; label?: string; color?: string }) {
   const drag = useRef<{ pointerId: number; plane: Plane; startHit: Vector3; start: Vector3 } | null>(null);
   const down = (event: ThreeEvent<PointerEvent>) => {
     if (event.button !== 0) return;
@@ -34,9 +35,9 @@ function PointMarker({ point, onMove }: { point: Vector3; onMove: (point: Vector
   };
   return <group position={point.toArray()}>
     <mesh onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-      <sphereGeometry args={[0.16, 24, 18]} /><meshStandardMaterial color="#b9ee72" emissive="#58852a" emissiveIntensity={0.38} />
+      <sphereGeometry args={[0.16, 24, 18]} /><meshStandardMaterial color={color} emissive="#58852a" emissiveIntensity={0.38} />
     </mesh>
-    <SceneLabel label="Point P" position={[0, 0, 0.25]} color="#d4f6a9" />
+    <SceneLabel label={label} position={[0, 0, 0.25]} color="#d4f6a9" />
   </group>;
 }
 
@@ -92,6 +93,17 @@ function RotationScene() {
   </>;
 }
 
+function IKScene() {
+  const { robotAngles, ikTarget, setIkTarget } = useLabStore();
+  const end = forwardKinematics(robotAngles).T_base_tool.position;
+  return <>
+    <Robot angles={robotAngles} step={3} />
+    <Line points={[end.toArray(), ikTarget.toArray()]} color="#b9ee72" lineWidth={2.5} dashed dashSize={.08} gapSize={.05} />
+    <PointMarker point={ikTarget} onMove={setIkTarget} label="IK Target" />
+    <mesh position={[0, 0, 0]}><sphereGeometry args={[3.05, 32, 20]} /><meshBasicMaterial color="#89a66b" wireframe transparent opacity={.035} depthWrite={false} /></mesh>
+  </>;
+}
+
 function WorldGrid() {
   return <>
     <gridHelper args={[14, 28, '#4c4939', '#252720']} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.005]} />
@@ -99,11 +111,12 @@ function WorldGrid() {
   </>;
 }
 
-function SceneCamera({ mode }: { mode: 'frames' | 'rotation' | 'chain' | 'fk' }) {
+function SceneCamera({ mode }: { mode: 'frames' | 'rotation' | 'chain' | 'fk' | 'ik' | 'pinocchio' }) {
   const { camera, controls, invalidate } = useThree();
   useEffect(() => {
-    const position: [number, number, number] = mode === 'fk' ? [2.5, -3.4, 2.6] : mode === 'rotation' ? [3.2, -5, 3.7] : [3.1, -4.2, 3.0];
-    const target: [number, number, number] = mode === 'fk' ? [1.35, 0.55, 0.25] : mode === 'rotation' ? [0, 0, 0.45] : [0.9, 0.5, 0.45];
+    const robotMode = mode === 'fk' || mode === 'ik' || mode === 'pinocchio';
+    const position: [number, number, number] = robotMode ? [2.5, -3.4, 2.6] : mode === 'rotation' ? [3.2, -5, 3.7] : [3.1, -4.2, 3.0];
+    const target: [number, number, number] = robotMode ? [1.35, 0.55, 0.25] : mode === 'rotation' ? [0, 0, 0.45] : [0.9, 0.5, 0.45];
     camera.position.set(...position);
     const orbit = controls as { target?: Vector3; update?: () => void } | null;
     if (orbit?.target) { orbit.target.set(...target); orbit.update?.(); }
@@ -117,14 +130,15 @@ export function Scene() {
   const mode = useLabStore((state) => state.mode);
   const robotAngles = useLabStore((state) => state.robotAngles);
   const fkStep = useLabStore((state) => state.fkStep);
+  const pinStep = useLabStore((state) => state.pinStep);
   return <div className="scene-shell" aria-label="三维机器人学场景">
     <Canvas camera={{ position: [3.1, -4.2, 3.0], up: [0, 0, 1], fov: 42, near: 0.1, far: 100 }} dpr={[1, 2]} fallback={<div className="webgl-fallback">此浏览器无法启动 3D 场景，数值和矩阵仍可使用。</div>}>
       <color attach="background" args={['#0b0c09']} />
       <WorldGrid />
-      {mode === 'fk' ? <Robot angles={robotAngles} step={fkStep} /> : mode === 'rotation' ? <RotationScene /> : <FrameScene />}
+      {mode === 'fk' ? <Robot angles={robotAngles} step={fkStep} /> : mode === 'ik' ? <IKScene /> : mode === 'pinocchio' ? <Robot angles={robotAngles} step={pinStep < 3 ? 0 : pinStep < 5 ? 2 : 3} /> : mode === 'rotation' ? <RotationScene /> : <FrameScene />}
       <OrbitControls makeDefault target={[0.9, 0.5, 0.45]} enablePan={false} minDistance={2.5} maxDistance={18} mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.ROTATE, RIGHT: MOUSE.DOLLY }} />
       <SceneCamera mode={mode} />
     </Canvas>
-    <div className="scene-overlay"><span className="scene-live">● 实时同步</span><span>{mode === 'frames' || mode === 'chain' ? '中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放' : '中键转视角 · 右侧调节角度 · 滚轮缩放'}</span></div>
+    <div className="scene-overlay"><span className="scene-live">● 实时同步</span><span>{mode === 'frames' || mode === 'chain' ? '中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放' : mode === 'ik' ? '中键转视角 · 左键拖动 Target · 滚轮缩放' : '中键转视角 · 右侧调节参数 · 滚轮缩放'}</span></div>
   </div>;
 }
