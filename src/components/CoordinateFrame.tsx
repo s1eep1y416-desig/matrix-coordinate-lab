@@ -26,8 +26,7 @@ interface CoordinateFrameProps {
 
 export function SceneLabel({ label, position, color = '#e6eadf', fontSize = 0.17 }: { label: string; position: [number, number, number]; color?: string; fontSize?: number }) {
   return <Billboard position={position} follow>
-    <mesh position={[0, 0, -0.015]}><planeGeometry args={[Math.max(0.34, label.length * fontSize * 0.58 + 0.15), fontSize * 1.55]} /><meshBasicMaterial color="#10130f" transparent opacity={0.9} depthTest={false} /></mesh>
-    <Text font={labelFont} fontSize={fontSize} color={color} anchorX="center" anchorY="middle" material-depthTest={false}>{label}</Text>
+    <Text font={labelFont} fontSize={fontSize} color={color} anchorX="center" anchorY="middle" material-depthTest={false} material-depthWrite={false}>{label}</Text>
   </Billboard>;
 }
 
@@ -94,10 +93,10 @@ export function CoordinateFrame({ pose, label, accent = '#d7dbe3', length = 0.85
       {(selected || label === 'World') && <SceneLabel label={axis.label.toLowerCase()} position={axis.point.map((number) => number * (length + 0.12)) as [number, number, number]} color={axis.color} fontSize={0.17} />}
     </group>)}
     <mesh onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onClick={(event) => { event.stopPropagation(); onSelect?.(); }}>
-      <sphereGeometry args={[draggable ? 0.17 : 0.055, 16, 10]} />
+      <sphereGeometry args={[draggable ? 0.17 : 0.032, 16, 10]} />
       <meshBasicMaterial color={accent} transparent opacity={draggable ? 0 : 1} depthWrite={!draggable} />
     </mesh>
-    {draggable && <mesh><sphereGeometry args={[selected ? 0.075 : 0.055, 16, 10]} /><meshBasicMaterial color={accent} /></mesh>}
+    {draggable && <mesh><sphereGeometry args={[selected ? 0.035 : 0.028, 16, 10]} /><meshBasicMaterial color={accent} /></mesh>}
     <SceneLabel label={label} position={[0.14, 0, -0.19]} color={accent} fontSize={0.15} />
   </group>;
 }
