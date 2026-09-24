@@ -5,7 +5,7 @@ import { forwardKinematics } from './math/kinematics';
 import { jacobianManipulability, positionJacobian } from './math/inverseKinematics';
 import { axisAngleFromQuaternion } from './math/quaternion';
 import { rotationAbout, rotationMatrix, rotationProduct, validateRotation } from './math/rotation';
-import { inversePose, inverseTransformPoint, poseMatrix, transformPoint, validateHomogeneous } from './math/transform';
+import { inversePose, inverseTransformPoint, matrixMaxError, poseMatrix, transformPoint, validateHomogeneous } from './math/transform';
 import { Formula, MatrixView, VectorReadout } from './components/MathView';
 import { NumberField, formatValue } from './components/NumberField';
 import { Scene } from './components/Scene';
@@ -25,6 +25,7 @@ const labels = ['X', 'Y', 'Z'] as const;
 const dofKeys: DofKey[] = ['tx', 'ty', 'tz', 'rx', 'ry', 'rz'];
 const texId = (id: string) => id === 'world' ? 'W' : id.replace(/[^A-Za-z0-9]/g, '');
 const vectorText = (vector: Vector3) => `[ ${vector.toArray().map(formatValue).join(' , ')} ]`;
+const compactVectorText = (vector: Vector3) => `(${vector.toArray().map((value) => formatValue(Number(value.toFixed(3)))).join(', ')})`;
 function frameDepth(frames: FrameNode[], id: string): number {
   let depth = 0;
   let current = frames.find((frame) => frame.id === id);
@@ -81,6 +82,11 @@ function FramePoseControls({ selected }: { selected: FrameNode }) {
         min={selected.constraints[dofKeys[index + 3]].min} max={selected.constraints[dofKeys[index + 3]].max}
         onCommit={(value) => setFrameEuler(selected.id, index as 0 | 1 | 2, value)} />)}
     </div>
+    {editable && <div className="frame-presets" aria-label="旋转预设">
+      <button onClick={() => ([0, 0, 45] as const).forEach((value, index) => setFrameEuler(selected.id, index as 0 | 1 | 2, value))}>绕 Z 45°</button>
+      <button onClick={() => ([25, -20, 35] as const).forEach((value, index) => setFrameEuler(selected.id, index as 0 | 1 | 2, value))}>空间倾斜</button>
+      <button onClick={() => ([0, 0, 0] as const).forEach((value, index) => setFrameEuler(selected.id, index as 0 | 1 | 2, value))}>清零旋转</button>
+    </div>}
     <label className="select-label">欧拉角顺序
       <select value={eulerOrder} onChange={(event) => setEulerOrder(event.target.value as EulerOrder)}>
         {EULER_ORDERS.map((order) => <option key={order}>{order}</option>)}
@@ -155,7 +161,7 @@ function FrameControls() {
   const frames = useLabStore((state) => state.frames);
   const selectedFrameId = useLabStore((state) => state.selectedFrameId);
   const selected = frames.find((frame) => frame.id === selectedFrameId) ?? frames[0];
-  return <><FrameTree /><FramePoseControls selected={selected} /><DofControls selected={selected} /><PointControls selected={selected} /><QuaternionControls selected={selected} /></>;
+  return <><FrameTree /><TransformControls /><FramePoseControls selected={selected} /><PointControls selected={selected} /><DofControls selected={selected} /><QuaternionControls selected={selected} /></>;
 }
 
 function RotationControls() {
@@ -177,10 +183,10 @@ function RotationControls() {
 
 function TransformControls() {
   const { frames, sourceId, targetId, setSource, setTarget } = useLabStore();
-  return <section className="control-card"><PaneTitle eyebrow="RELATIVE TRANSFORM" title="从哪个 Frame 看？" />
+  return <section className="control-card"><PaneTitle eyebrow="SOURCE → TARGET" title="坐标系选择" />
     <div className="two-selects"><label className="select-label">源坐标系<select value={sourceId} onChange={(event) => setSource(event.target.value)}>{frames.map((frame) => <option key={frame.id} value={frame.id}>{frame.name}</option>)}</select></label>
       <label className="select-label">目标坐标系<select value={targetId} onChange={(event) => setTarget(event.target.value)}>{frames.map((frame) => <option key={frame.id} value={frame.id}>{frame.name}</option>)}</select></label></div>
-    <p className="fine-print">显示 <Formula tex={`{}^{${texId(targetId)}}T_{${texId(sourceId)}}`} />。它把源坐标系里的点转换为目标坐标系的数值。</p>
+    <p className="fine-print">同一个点 P 保持在原处；切换源与目标后，读数和 <Formula tex={`{}^{${texId(targetId)}}T_{${texId(sourceId)}}`} /> 同步变化。</p>
   </section>;
 }
 
@@ -258,7 +264,7 @@ function IKResults() {
   const manipulability = jacobianManipulability(jacobian);
   const converged = errorNorm < 1e-3;
   return <div className="results-stack">
-    <div className="result-intro"><span className="eyebrow">INVERSE KINEMATICS · POSITION</span><h2>目标位姿 → 关节角</h2><p>绿色点是目标，金色机械臂是当前解；误差线会随每次 Jacobian 迭代缩短。</p></div>
+    <div className="result-intro"><span className="eyebrow">INVERSE KINEMATICS · POSITION</span><h2>目标位置 → 关节角</h2><p>当前是教学用 3 关节模型。绿色点是目标，金色机械臂是当前解；误差线会随每次 Jacobian 迭代缩短。</p></div>
     <div className="equation-strip"><Formula tex="e=p_{target}-p(q),\quad \Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" /><span>DLS + 下降线搜索</span></div>
     <div className="readout-grid"><VectorReadout label="目标位置 · m" values={ikTarget.toArray()} /><VectorReadout label="当前末端 · m" values={fk.T_base_tool.position.toArray()} /><VectorReadout label="Cartesian error · m" values={error.toArray()} /><VectorReadout label="当前关节角 · °" values={robotAngles} unit="°" /></div>
     <div className="validation-line"><span className={converged ? 'good' : 'warn'}>● {converged ? '已收敛' : reachable ? '等待迭代' : '目标超出最大臂展'}</span><span>‖e‖ = {formatValue(errorNorm)} m</span><span>|det(J)| = {formatValue(manipulability)}</span><span>迭代 {ikIterations}</span></div>
@@ -289,37 +295,60 @@ function FrameResults() {
   const T_selected_W = inversePose(T_W_selected);
   const T_target_source = relativeFramePose(frames, targetId, sourceId);
   const T_W_source = worldPoseFor(frames, sourceId);
+  const T_W_target = worldPoseFor(frames, targetId);
   const pSource = inverseTransformPoint(T_W_source, pointWorld);
-  const pTarget = inverseTransformPoint(worldPoseFor(frames, targetId), pointWorld);
+  const pTarget = inverseTransformPoint(T_W_target, pointWorld);
   const euler = eulerFromQuaternion(T_W_selected.quaternion, eulerOrder);
   const axisAngle = axisAngleFromQuaternion(T_W_selected.quaternion);
   const validation = validateRotation(T_W_selected.quaternion);
   const quaternion = T_W_selected.quaternion;
   const frameB = frames.find((frame) => frame.id === 'B');
+  const relativeMatrix = poseMatrix(T_target_source);
+  const independentRelativeMatrix = poseMatrix(T_W_target).invert().multiply(poseMatrix(T_W_source));
+  const relativeError = matrixMaxError(relativeMatrix, independentRelativeMatrix);
+  const inverseError = matrixMaxError(poseMatrix(T_selected_W), poseMatrix(T_W_selected).invert());
+  const pointError = pSource.clone().applyMatrix4(independentRelativeMatrix).distanceTo(pTarget);
+  const chainError = frameB ? matrixMaxError(
+    poseMatrix(worldPoseFor(frames, 'B')),
+    poseMatrix(worldPoseFor(frames, frameB.parentId ?? 'world')).multiply(poseMatrix(frameB.pose)),
+  ) : 0;
+  const maxError = Math.max(relativeError, inverseError, pointError, chainError);
+  const matrixValid = maxError < 1e-8 && validation.valid && validateHomogeneous(relativeMatrix);
   return <div className="results-stack">
-    <div className="result-intro"><span className="eyebrow">COORDINATE TRANSFORM</span><h2>空间位置与矩阵同步</h2><p>拖动坐标系或点 P，下面的数字会随场景一起更新。</p></div>
+    <div className="conversion-strip" aria-live="polite">
+      <div className="conversion-step"><span>源坐标系 · {sourceId === 'world' ? 'World' : `Frame ${sourceId}`}</span><strong>{compactVectorText(pSource)}</strong></div>
+      <span className="conversion-arrow">→</span>
+      <div className="conversion-step"><span>世界坐标 · World</span><strong>{compactVectorText(pointWorld)}</strong></div>
+      <span className="conversion-arrow">→</span>
+      <div className="conversion-step result"><span>目标坐标系 · {targetId === 'world' ? 'World' : `Frame ${targetId}`}</span><strong>{compactVectorText(pTarget)}</strong></div>
+    </div>
+    <div className="conversion-formula"><Formula tex={`\\tilde p_{${texId(targetId)}} = {}^{${texId(targetId)}}T_{${texId(sourceId)}}\\,\\tilde p_{${texId(sourceId)}}`} /><span>点 P 的空间位置固定 · 齐次坐标 w = 1</span></div>
+    <div className="matrix-layout core-matrices">
+      <MatrixView matrix={relativeMatrix} label={`{}^{${texId(targetId)}}T_{${texId(sourceId)}}`} />
+    </div>
+    <div className="validation-line"><span className={matrixValid ? 'good' : 'warn'}>● {matrixValid ? '矩阵换算校验通过' : '矩阵换算异常'}</span><span>相对变换误差 {formatValue(relativeError)}</span><span>逆矩阵误差 {formatValue(inverseError)}</span><span>点换算误差 {formatValue(pointError)}</span>{frameB && <span>父子连乘误差 {formatValue(chainError)}</span>}</div>
     {mode === 'chain' && frameB && <div className="equation-strip"><Formula tex={`{}^{W}T_{${texId(frameB.parentId ?? 'world')}}\\;{}^{${texId(frameB.parentId ?? 'world')}}T_B = {}^{W}T_B`} /><span>父子变换连乘</span></div>}
-    <div className="matrix-layout">
-      <MatrixView matrix={poseMatrix(T_W_selected)} label={`{}^{W}T_{${texId(selectedFrameId)}}`} />
-      <MatrixView matrix={rotationMatrix(T_W_selected.quaternion)} size={3} label={`{}^{W}R_{${texId(selectedFrameId)}}`} />
-    </div>
-    <div className="readout-grid">
-      <VectorReadout label="World position · m" values={T_W_selected.position.toArray()} />
-      <VectorReadout label={`${eulerOrder}${eulerOrder === 'ZYX' ? ' / RPY' : ''} Euler · °`} values={euler} unit="°" />
-      <VectorReadout label="Quaternion [x, y, z, w]" values={[quaternion.x, quaternion.y, quaternion.z, quaternion.w]} />
-      <VectorReadout label="Axis-Angle · axis / °" values={[...axisAngle.axis.toArray(), axisAngle.angleDeg]} />
-    </div>
-    <div className="validation-line"><span className={validation.valid ? 'good' : 'warn'}>● {validation.valid ? '合法旋转矩阵' : '旋转矩阵有误'}</span><span>RᵀR≈I · 误差 {formatValue(validation.orthogonalityError)}</span><span>det(R) = {formatValue(validation.determinant)}</span><span>‖q‖ = {formatValue(quaternion.length())}</span><span>齐次末行 {validateHomogeneous(poseMatrix(T_W_selected)) ? '[0, 0, 0, 1] ✓' : '异常'}</span></div>
-    <div className="matrix-layout secondary">
-      <MatrixView matrix={poseMatrix(T_selected_W)} label={`{}^{${texId(selectedFrameId)}}T_W = ({}^{W}T_{${texId(selectedFrameId)}})^{-1}`} compact />
-      <MatrixView matrix={poseMatrix(T_target_source)} label={`{}^{${texId(targetId)}}T_{${texId(sourceId)}}`} compact />
-    </div>
-    <div className="equation-strip"><Formula tex={`p_{${texId(targetId)}} = ({}^{W}T_{${texId(targetId)}})^{-1}\\,{}^{W}T_{${texId(sourceId)}}\\,p_{${texId(sourceId)}}`} /><span>{vectorText(pSource)} → {vectorText(pTarget)}</span></div>
     {mode === 'chain' && frameB && <div className="matrix-layout secondary">
       <MatrixView matrix={poseMatrix(worldPoseFor(frames, frameB.parentId ?? 'world'))} label={`{}^{W}T_{${texId(frameB.parentId ?? 'world')}}`} compact />
       <MatrixView matrix={poseMatrix(frameB.pose)} label={`{}^{${texId(frameB.parentId ?? 'world')}}T_B`} compact />
       <MatrixView matrix={poseMatrix(worldPoseFor(frames, 'B'))} label="{}^{W}T_B" compact />
     </div>}
+    <details className="advanced-results">
+      <summary>查看旋转、四元数与逆变换 <span>展开详细校验</span></summary>
+      <div className="readout-grid">
+        <VectorReadout label="World position · m" values={T_W_selected.position.toArray()} />
+        <VectorReadout label={`${eulerOrder}${eulerOrder === 'ZYX' ? ' / RPY' : ''} Euler · °`} values={euler} unit="°" />
+        <VectorReadout label="Quaternion [x, y, z, w]" values={[quaternion.x, quaternion.y, quaternion.z, quaternion.w]} />
+        <VectorReadout label="Axis-Angle · axis / °" values={[...axisAngle.axis.toArray(), axisAngle.angleDeg]} />
+      </div>
+      <div className="matrix-layout secondary">
+        <MatrixView matrix={poseMatrix(T_W_selected)} label={`{}^{W}T_{${texId(selectedFrameId)}}`} compact />
+        <MatrixView matrix={rotationMatrix(T_W_selected.quaternion)} size={3} label={`{}^{W}R_{${texId(selectedFrameId)}}`} compact />
+        <MatrixView matrix={poseMatrix(T_selected_W)} label={`{}^{${texId(selectedFrameId)}}T_W = ({}^{W}T_{${texId(selectedFrameId)}})^{-1}`} compact />
+      </div>
+      <div className="validation-line"><span className={validation.valid ? 'good' : 'warn'}>● {validation.valid ? '合法旋转矩阵' : '旋转矩阵有误'}</span><span>RᵀR≈I · 误差 {formatValue(validation.orthogonalityError)}</span><span>det(R) = {formatValue(validation.determinant)}</span><span>‖q‖ = {formatValue(quaternion.length())}</span><span>齐次末行 {validateHomogeneous(poseMatrix(T_W_selected)) ? '[0, 0, 0, 1] ✓' : '异常'}</span></div>
+      <div className="equation-strip"><Formula tex={`{}^{${texId(targetId)}}T_{${texId(sourceId)}} = ({}^{W}T_{${texId(targetId)}})^{-1}\\,{}^{W}T_{${texId(sourceId)}}`} /><span>列向量约定：右边先作用</span></div>
+    </details>
   </div>;
 }
 
@@ -351,7 +380,7 @@ function FKResults() {
   const chainError = Math.max(...finalMatrix.elements.map((value, index) => Math.abs(value - chainMatrix.elements[index])));
   const fkValid = chainError < 1e-8 && validateRotation(q).valid && validateHomogeneous(finalMatrix);
   return <div className="results-stack">
-    <div className="result-intro"><span className="eyebrow">FORWARD KINEMATICS</span><h2>关节角 → 末端位姿</h2><p>每个关节改变后，下游连杆、坐标轴与矩阵链实时重算。</p></div>
+    <div className="result-intro"><span className="eyebrow">FORWARD KINEMATICS</span><h2>关节角 → 末端位姿</h2><p>当前是教学用 3 关节模型；每个关节改变后，下游连杆、坐标轴与矩阵链实时重算。真实几何将在你提供 URDF 后替换。</p></div>
     <div className="equation-strip"><Formula tex="{}^{\mathrm{base}}T_{\mathrm{tool}} = {}^{\mathrm{base}}T_{\mathrm{link1}}\;{}^{\mathrm{link1}}T_{\mathrm{link2}}\;{}^{\mathrm{link2}}T_{\mathrm{tool}}" /><span>q1 → q2 → q3</span></div>
     <div className="matrix-layout"><MatrixView matrix={finalMatrix} label="{}^{\mathrm{base}}T_{\mathrm{tool}}" />
       <MatrixView matrix={rotationMatrix(fk.T_base_tool.quaternion)} size={3} label="{}^{\mathrm{base}}R_{\mathrm{tool}}" /></div>
@@ -376,7 +405,7 @@ export default function App() {
         {mode === 'rotation' ? <RotationResults /> : mode === 'fk' ? <FKResults /> : mode === 'ik' ? <IKResults /> : mode === 'pinocchio' ? <PinocchioResults /> : <FrameResults />}
       </section>
       <aside className="control-panel" aria-label="实验操作栏"><div className="control-heading"><span className="eyebrow">CONTROLS</span><strong>实验操作</strong><span>{NAV.find((item) => item.id === mode)?.short}</span></div>
-        {mode === 'rotation' ? <RotationControls /> : mode === 'fk' ? <FKControls /> : mode === 'ik' ? <IKControls /> : mode === 'pinocchio' ? <PinocchioControls /> : <><FrameControls />{mode === 'chain' && <TransformControls />}</>}
+        {mode === 'rotation' ? <RotationControls /> : mode === 'fk' ? <FKControls /> : mode === 'ik' ? <IKControls /> : mode === 'pinocchio' ? <PinocchioControls /> : <FrameControls />}
       </aside>
     </main>
   </div>;

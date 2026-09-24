@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { sameOrientation } from '../math/quaternion';
-import { useLabStore, worldPoseFor } from './labStore';
+import { matrixMaxError, poseMatrix } from '../math/transform';
+import { relativeFramePose, useLabStore, worldPoseFor } from './labStore';
 
 beforeEach(() => useLabStore.getState().reset());
 
@@ -50,5 +51,22 @@ describe('frame limits and hierarchy', () => {
     store.setEulerOrder('XYZ');
     const changed = useLabStore.getState().frames.find((frame) => frame.id === 'A')!.pose.quaternion;
     expect(sameOrientation(original, changed)).toBe(false);
+  });
+
+  it('keeps a multi-level frame tree consistent with matrix products after editing and reparenting', () => {
+    const store = useLabStore.getState();
+    store.setFramePosition('A', 2, 0.8);
+    store.setFrameEuler('A', 0, 25);
+    store.setFrameEuler('A', 1, -35);
+    store.addFrame('A');
+    const state = useLabStore.getState();
+    const A = state.frames.find((frame) => frame.id === 'A')!;
+    const B = state.frames.find((frame) => frame.id === 'B')!;
+    const matrixWorldB = poseMatrix(A.pose).multiply(poseMatrix(B.pose));
+    expect(matrixMaxError(poseMatrix(worldPoseFor(state.frames, 'B')), matrixWorldB)).toBeLessThan(1e-9);
+    expect(matrixMaxError(poseMatrix(relativeFramePose(state.frames, 'A', 'B')), poseMatrix(B.pose))).toBeLessThan(1e-9);
+    store.reparentFrame('B', 'world');
+    const reparented = useLabStore.getState();
+    expect(matrixMaxError(poseMatrix(worldPoseFor(reparented.frames, 'B')), matrixWorldB)).toBeLessThan(1e-9);
   });
 });

@@ -5,7 +5,7 @@ import { axisAngleFromQuaternion, quaternionFromAxisAngle, sameOrientation } fro
 import { forwardKinematics, LINK_LENGTHS } from './kinematics';
 import { finiteDifferenceJacobian, ikStep, positionJacobian, solveIK } from './inverseKinematics';
 import { rotationAbout, rotationProduct, validateRotation, validateRotationMatrix } from './rotation';
-import { composePoses, identityPose, inversePose, inverseTransformPoint, makePose, poseMatrix, relativePose, transformPoint, validateHomogeneous } from './transform';
+import { composePoses, identityPose, inversePose, inverseTransformPoint, makePose, matrixMaxError, matrixRows, poseMatrix, relativePose, transformPoint, validateHomogeneous } from './transform';
 
 const expectVector = (actual: Vector3, expected: Vector3, tolerance = 1e-9) => {
   expect(actual.distanceTo(expected)).toBeLessThan(tolerance);
@@ -46,6 +46,14 @@ describe('rotation representations', () => {
     expect(validation.determinant).toBeCloseTo(1, 10);
     expect(validateRotationMatrix(new Matrix4().makeScale(2, 1, 1)).valid).toBe(false);
   });
+
+  it('checks the 3×3 rotation block independently of homogeneous translation and last row', () => {
+    const matrix = new Matrix4().makeTranslation(2, -1, 3);
+    expect(validateRotationMatrix(matrix).valid).toBe(true);
+    matrix.elements[15] = 2;
+    expect(validateRotationMatrix(matrix).valid).toBe(true);
+    expect(validateHomogeneous(matrix)).toBe(false);
+  });
 });
 
 describe('transform chain', () => {
@@ -73,6 +81,22 @@ describe('transform chain', () => {
     const pointWorld = transformPoint(T_world_A, pointA);
     expectVector(inverseTransformPoint(T_world_A, pointWorld), pointA);
     expectVector(transformPoint(identityPose(), pointWorld), pointWorld);
+  });
+
+  it('matches displayed row-major entries and independent 4×4 coordinate conversion', () => {
+    const T_W_source = makePose(new Vector3(1, 2, 3), rotationAbout('Z', 90));
+    const T_W_target = makePose(new Vector3(-0.3, 0.7, 1), quaternionFromEuler([15, -25, 40], 'ZYX'));
+    expect(matrixRows(poseMatrix(T_W_source)).map((row) => row.map((value) => Math.round(value * 1e9) / 1e9))).toEqual([
+      [0, -1, 0, 1], [1, 0, 0, 2], [0, 0, 1, 3], [0, 0, 0, 1],
+    ]);
+    const T_target_source = relativePose(T_W_target, T_W_source);
+    const matrixProduct = poseMatrix(T_W_target).invert().multiply(poseMatrix(T_W_source));
+    expect(matrixMaxError(poseMatrix(T_target_source), matrixProduct)).toBeLessThan(1e-10);
+    const pointSource = new Vector3(0.8, -0.4, 0.5);
+    const pointWorld = transformPoint(T_W_source, pointSource);
+    const pointTarget = inverseTransformPoint(T_W_target, pointWorld);
+    expectVector(pointSource.clone().applyMatrix4(matrixProduct), pointTarget, 1e-10);
+    expect(matrixMaxError(poseMatrix(inversePose(T_W_source)), poseMatrix(T_W_source).invert())).toBeLessThan(1e-10);
   });
 });
 

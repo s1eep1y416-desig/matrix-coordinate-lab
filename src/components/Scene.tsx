@@ -53,7 +53,7 @@ function FrameScene() {
     })}
     {visibleFrames.map((frame) => <CoordinateFrame
       key={frame.id} pose={worldPoseFor(frames, frame.id)} label={frame.name} selected={frame.id === selectedFrameId}
-      length={frame.id === 'world' ? 1.15 : 0.82} subtle={frame.id === 'world'} draggable={frame.id !== 'world'}
+      length={frame.id === 'world' ? 1.25 : 1.02} subtle={frame.id === 'world'} draggable={frame.id !== 'world'}
       onSelect={() => selectFrame(frame.id)} onMoveWorld={(point) => moveFrameWorld(frame.id, point)}
       onRotateWorld={(quaternion) => {
         const parent = worldPoseFor(useLabStore.getState().frames, frame.parentId ?? 'world');
@@ -111,7 +111,7 @@ function WorldGrid() {
   </>;
 }
 
-function SceneCamera({ mode }: { mode: 'frames' | 'rotation' | 'chain' | 'fk' | 'ik' | 'pinocchio' }) {
+function SceneCamera({ mode, resetKey }: { mode: 'frames' | 'rotation' | 'chain' | 'fk' | 'ik' | 'pinocchio'; resetKey: number }) {
   const { camera, controls, invalidate } = useThree();
   useEffect(() => {
     const robotMode = mode === 'fk' || mode === 'ik' || mode === 'pinocchio';
@@ -122,7 +122,7 @@ function SceneCamera({ mode }: { mode: 'frames' | 'rotation' | 'chain' | 'fk' | 
     if (orbit?.target) { orbit.target.set(...target); orbit.update?.(); }
     else camera.lookAt(...target);
     invalidate();
-  }, [camera, controls, invalidate, mode]);
+  }, [camera, controls, invalidate, mode, resetKey]);
   return null;
 }
 
@@ -131,14 +131,25 @@ export function Scene() {
   const robotAngles = useLabStore((state) => state.robotAngles);
   const fkStep = useLabStore((state) => state.fkStep);
   const pinStep = useLabStore((state) => state.pinStep);
+  const cameraResetKey = useLabStore((state) => state.cameraResetKey);
+  const resetCamera = useLabStore((state) => state.resetCamera);
+  const sourceId = useLabStore((state) => state.sourceId);
+  const targetId = useLabStore((state) => state.targetId);
+  const frames = useLabStore((state) => state.frames);
+  const frameName = (id: string) => frames.find((frame) => frame.id === id)?.name ?? id;
   return <div className="scene-shell" aria-label="三维机器人学场景">
     <Canvas camera={{ position: [3.1, -4.2, 3.0], up: [0, 0, 1], fov: 42, near: 0.1, far: 100 }} dpr={[1, 2]} fallback={<div className="webgl-fallback">此浏览器无法启动 3D 场景，数值和矩阵仍可使用。</div>}>
       <color attach="background" args={['#0b0c09']} />
       <WorldGrid />
       {mode === 'fk' ? <Robot angles={robotAngles} step={fkStep} /> : mode === 'ik' ? <IKScene /> : mode === 'pinocchio' ? <Robot angles={robotAngles} step={pinStep < 3 ? 0 : pinStep < 5 ? 2 : 3} /> : mode === 'rotation' ? <RotationScene /> : <FrameScene />}
       <OrbitControls makeDefault target={[0.9, 0.5, 0.45]} enablePan={false} minDistance={2.5} maxDistance={18} mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.ROTATE, RIGHT: MOUSE.DOLLY }} />
-      <SceneCamera mode={mode} />
+      <SceneCamera mode={mode} resetKey={cameraResetKey} />
     </Canvas>
+    {(mode === 'frames' || mode === 'chain') && <>
+      <div className="scene-axis-legend" aria-label="坐标轴颜色：X 红、Y 绿、Z 蓝"><span className="x">X</span><span className="y">Y</span><span className="z">Z</span></div>
+      <div className="scene-route"><span>源</span><strong>{frameName(sourceId)}</strong><b>→</b><span>目标</span><strong>{frameName(targetId)}</strong></div>
+    </>}
+    <button className="scene-reset-view" onClick={resetCamera}>重置视角</button>
     <div className="scene-overlay"><span className="scene-live">● 实时同步</span><span>{mode === 'frames' || mode === 'chain' ? '中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放' : mode === 'ik' ? '中键转视角 · 左键拖动 Target · 滚轮缩放' : '中键转视角 · 右侧调节参数 · 滚轮缩放'}</span></div>
   </div>;
 }

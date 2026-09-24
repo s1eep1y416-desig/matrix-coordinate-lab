@@ -6,9 +6,9 @@ import type { Pose } from '../math/transform';
 import labelFont from 'katex/dist/fonts/KaTeX_Main-Regular.ttf?url';
 
 const axes = [
-  { color: '#ff655c', label: 'X', point: [1, 0, 0] as [number, number, number] },
-  { color: '#69dd82', label: 'Y', point: [0, 1, 0] as [number, number, number] },
-  { color: '#6b9cff', label: 'Z', point: [0, 0, 1] as [number, number, number] },
+  { color: '#ff655c', label: 'X', point: [1, 0, 0] as [number, number, number], tipRotation: [0, 0, -Math.PI / 2] as [number, number, number] },
+  { color: '#69dd82', label: 'Y', point: [0, 1, 0] as [number, number, number], tipRotation: [0, 0, 0] as [number, number, number] },
+  { color: '#6b9cff', label: 'Z', point: [0, 0, 1] as [number, number, number], tipRotation: [Math.PI / 2, 0, 0] as [number, number, number] },
 ];
 
 interface CoordinateFrameProps {
@@ -82,11 +82,15 @@ export function CoordinateFrame({ pose, label, length = 0.85, selected, draggabl
   return <group position={pose.position.toArray()} quaternion={pose.quaternion.clone()}>
     {axes.map((axis) => <group key={axis.label}>
       <Line points={[[0, 0, 0], axis.point.map((number) => number * length) as [number, number, number]]} color={axis.color} lineWidth={subtle ? 1.6 : 3} transparent opacity={subtle ? 0.65 : 1} />
+      <mesh position={axis.point.map((number) => number * length * 0.82) as [number, number, number]} rotation={axis.tipRotation}>
+        <coneGeometry args={[subtle ? 0.045 : 0.068, subtle ? 0.13 : 0.18, 12]} />
+        <meshBasicMaterial color={axis.color} transparent opacity={subtle ? 0.75 : 1} />
+      </mesh>
       <mesh position={axis.point.map((number) => number * length) as [number, number, number]}
         onPointerDown={(event) => axisDown(event, axis.point)} onPointerMove={axisMove} onPointerUp={axisEnd} onPointerCancel={axisEnd}>
         <sphereGeometry args={[draggable ? 0.095 : subtle ? 0.035 : 0.05, 16, 12]} /><meshBasicMaterial color={axis.color} />
       </mesh>
-      {!subtle && <SceneLabel label={axis.label} position={axis.point.map((number) => number * (length + 0.13)) as [number, number, number]} color={axis.color} fontSize={0.18} />}
+      {(!subtle || label === 'World') && <SceneLabel label={axis.label} position={axis.point.map((number) => number * (length + 0.13)) as [number, number, number]} color={axis.color} fontSize={0.18} />}
     </group>)}
     <mesh onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onClick={(event) => { event.stopPropagation(); onSelect?.(); }}>
       <sphereGeometry args={[selected ? 0.17 : 0.14, 22, 16]} />

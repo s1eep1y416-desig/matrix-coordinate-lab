@@ -54,3 +54,7 @@ export function validateHomogeneous(matrix: Matrix4, tolerance = 1e-8): boolean 
   const row = matrixRows(matrix, 4)[3];
   return row.every((value, index) => Math.abs(value - (index === 3 ? 1 : 0)) <= tolerance);
 }
+
+export function matrixMaxError(actual: Matrix4, expected: Matrix4): number {
+  return Math.max(...actual.elements.map((value, index) => Math.abs(value - expected.elements[index])));
+}

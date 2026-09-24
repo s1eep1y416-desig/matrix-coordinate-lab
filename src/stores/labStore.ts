@@ -87,6 +87,7 @@ interface LabState {
   ikDamping: number;
   ikIterations: number;
   pinStep: number;
+  cameraResetKey: number;
   setMode: (mode: LabMode) => void;
   selectFrame: (id: string) => void;
   setSource: (id: string) => void;
@@ -115,6 +116,7 @@ interface LabState {
   stepIK: () => void;
   solveIK: () => void;
   setPinStep: (step: number) => void;
+  resetCamera: () => void;
   reset: () => void;
 }
 
@@ -124,6 +126,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45],
   rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3,
   ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5,
+  cameraResetKey: 0,
   setMode: (mode) => {
     if (mode === 'chain' && !get().frames.some((frame) => frame.id === 'B')) {
       const B: FrameNode = { id: 'B', name: 'Frame B', parentId: 'A', pose: makePose(new Vector3(1.25, 0.15, 0.55), quaternionFromEuler([20, -10, 18], get().eulerOrder)), constraints: frameConstraints(), visible: true };
@@ -250,5 +253,6 @@ export const useLabStore = create<LabState>((set, get) => ({
     return { robotAngles: result.angles, ikIterations: state.ikIterations + result.iterations };
   }),
   setPinStep: (pinStep) => set({ pinStep: clamp(Math.round(pinStep), 0, 5) }),
-  reset: () => set({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5 }),
+  resetCamera: () => set((state) => ({ cameraResetKey: state.cameraResetKey + 1 })),
+  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
 }));

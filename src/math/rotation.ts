@@ -1,5 +1,4 @@
-import { Matrix4, MathUtils, Quaternion, Vector3 } from 'three';
-import { matrixRows } from './transform';
+import { Matrix3, Matrix4, MathUtils, Quaternion, Vector3 } from 'three';
 
 export type Axis = 'X' | 'Y' | 'Z';
 const AXES: Record<Axis, Vector3> = { X: new Vector3(1, 0, 0), Y: new Vector3(0, 1, 0), Z: new Vector3(0, 0, 1) };
@@ -18,10 +17,11 @@ export function rotationMatrix(quaternion: Quaternion): Matrix4 {
 }
 
 export function validateRotationMatrix(matrix: Matrix4, tolerance = 1e-8): { orthogonalityError: number; determinant: number; valid: boolean } {
-  const orthogonality = matrix.clone().transpose().multiply(matrix);
-  const rows = matrixRows(orthogonality, 3);
+  const rotation = new Matrix3().setFromMatrix4(matrix);
+  const orthogonality = rotation.clone().transpose().multiply(rotation);
+  const rows = Array.from({ length: 3 }, (_, row) => Array.from({ length: 3 }, (_, column) => orthogonality.elements[column * 3 + row]));
   const orthogonalityError = Math.max(...rows.flatMap((row, r) => row.map((value, c) => Math.abs(value - (r === c ? 1 : 0)))));
-  const determinant = matrix.determinant();
+  const determinant = rotation.determinant();
   return { orthogonalityError, determinant, valid: orthogonalityError <= tolerance && Math.abs(determinant - 1) <= tolerance };
 }
 
