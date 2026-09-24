@@ -10,7 +10,7 @@ import { Formula, MatrixView, VectorReadout } from './components/MathView';
 import { NumberField, formatValue } from './components/NumberField';
 import { Scene } from './components/Scene';
 import { RotationPlayback } from './components/RotationPlayback';
-import { useLabStore, worldPoseFor, relativeFramePose, type DofKey, type FrameNode, type LabMode } from './stores/labStore';
+import { framePathIds, useLabStore, worldPoseFor, relativeFramePose, type DofKey, type FrameNode, type LabMode } from './stores/labStore';
 import 'katex/dist/katex.min.css';
 import './styles.css';
 
@@ -161,7 +161,7 @@ function FrameControls() {
   const frames = useLabStore((state) => state.frames);
   const selectedFrameId = useLabStore((state) => state.selectedFrameId);
   const selected = frames.find((frame) => frame.id === selectedFrameId) ?? frames[0];
-  return <><FrameTree /><TransformControls /><FramePoseControls selected={selected} /><PointControls selected={selected} /><DofControls selected={selected} /><QuaternionControls selected={selected} /></>;
+  return <><FrameTree /><TransformControls /><TransformChainControls /><FramePoseControls selected={selected} /><PointControls selected={selected} /><DofControls selected={selected} /><QuaternionControls selected={selected} /></>;
 }
 
 function RotationControls() {
@@ -195,6 +195,17 @@ function TransformControls() {
     <div className="two-selects"><label className="select-label">源坐标系<select value={sourceId} onChange={(event) => setSource(event.target.value)}>{frames.map((frame) => <option key={frame.id} value={frame.id}>{frame.name}</option>)}</select></label>
       <label className="select-label">目标坐标系<select value={targetId} onChange={(event) => setTarget(event.target.value)}>{frames.map((frame) => <option key={frame.id} value={frame.id}>{frame.name}</option>)}</select></label></div>
     <p className="fine-print">同一个点 P 保持在原处；切换源与目标后，读数和 <Formula tex={`{}^{${texId(targetId)}}T_{${texId(sourceId)}}`} /> 同步变化。</p>
+  </section>;
+}
+
+function TransformChainControls() {
+  const { frames, selectedFrameId, chainStep, setChainStep } = useLabStore();
+  const path = framePathIds(frames, selectedFrameId);
+  const effectiveStep = Math.min(chainStep, Math.max(0, path.length - 1));
+  const frameName = (id: string) => frames.find((frame) => frame.id === id)?.name ?? id;
+  return <section className="control-card"><PaneTitle eyebrow="CHAIN REPLAY" title="逐级查看变换链" aside={<span className="subtle-badge">{effectiveStep} / {Math.max(0, path.length - 1)}</span>} />
+    {path.length > 1 ? <div className="chain-step-buttons">{path.map((id, index) => <button key={id} className={effectiveStep === index ? 'active' : index < effectiveStep ? 'done' : ''} aria-pressed={effectiveStep === index} onClick={() => setChainStep(index)}><span>0{index}</span><strong>{frameName(id)}</strong></button>)}</div> : <p className="fine-print">先在坐标系层级中选择一个子坐标系。</p>}
+    <p className="fine-print">点击某一级，金色链路和矩阵会累计到该坐标系；编辑仍作用于当前选中的最终坐标系。</p>
   </section>;
 }
 
@@ -299,7 +310,7 @@ function PinocchioResults() {
 }
 
 function FrameResults() {
-  const { frames, selectedFrameId, sourceId, targetId, eulerOrder, pointWorld } = useLabStore();
+  const { frames, selectedFrameId, sourceId, targetId, eulerOrder, pointWorld, chainStep } = useLabStore();
   const T_W_selected = worldPoseFor(frames, selectedFrameId);
   const T_selected_W = inversePose(T_W_selected);
   const T_target_source = relativeFramePose(frames, targetId, sourceId);
@@ -311,17 +322,18 @@ function FrameResults() {
   const axisAngle = axisAngleFromQuaternion(T_W_selected.quaternion);
   const validation = validateRotation(T_W_selected.quaternion);
   const quaternion = T_W_selected.quaternion;
-  const chainFrame = frames.find((frame) => frame.id === selectedFrameId && frame.id !== 'world');
-  const chainParentId = chainFrame?.parentId ?? 'world';
+  const chainPath = framePathIds(frames, selectedFrameId);
+  const effectiveChainStep = Math.min(chainStep, Math.max(0, chainPath.length - 1));
+  const currentChainId = chainPath[effectiveChainStep] ?? 'world';
+  const chainLinks = chainPath.slice(1, effectiveChainStep + 1).map((id) => frames.find((frame) => frame.id === id)).filter((frame): frame is FrameNode => Boolean(frame));
+  const allChainLinks = chainPath.slice(1).map((id) => frames.find((frame) => frame.id === id)).filter((frame): frame is FrameNode => Boolean(frame));
   const relativeMatrix = poseMatrix(T_target_source);
   const independentRelativeMatrix = poseMatrix(T_W_target).invert().multiply(poseMatrix(T_W_source));
   const relativeError = matrixMaxError(relativeMatrix, independentRelativeMatrix);
   const inverseError = matrixMaxError(poseMatrix(T_selected_W), poseMatrix(T_W_selected).invert());
   const pointError = pSource.clone().applyMatrix4(independentRelativeMatrix).distanceTo(pTarget);
-  const chainError = chainFrame ? matrixMaxError(
-    poseMatrix(worldPoseFor(frames, chainFrame.id)),
-    poseMatrix(worldPoseFor(frames, chainParentId)).multiply(poseMatrix(chainFrame.pose)),
-  ) : 0;
+  const fullChainProduct = allChainLinks.reduce((product, frame) => product.multiply(poseMatrix(frame.pose)), new Matrix4());
+  const chainError = matrixMaxError(poseMatrix(worldPoseFor(frames, selectedFrameId)), fullChainProduct);
   const maxError = Math.max(relativeError, inverseError, pointError, chainError);
   const matrixValid = maxError < 1e-8 && validation.valid && validateHomogeneous(relativeMatrix);
   return <div className="results-stack">
@@ -336,14 +348,13 @@ function FrameResults() {
     <div className="matrix-layout core-matrices">
       <MatrixView matrix={relativeMatrix} label={`{}^{${texId(targetId)}}T_{${texId(sourceId)}}`} />
     </div>
-    <div className="validation-line"><span className={matrixValid ? 'good' : 'warn'}>● {matrixValid ? '矩阵换算校验通过' : '矩阵换算异常'}</span><span>相对变换误差 {formatValue(relativeError)}</span><span>逆矩阵误差 {formatValue(inverseError)}</span><span>点换算误差 {formatValue(pointError)}</span>{chainFrame && <span>父子连乘误差 {formatValue(chainError)}</span>}</div>
-    {chainFrame && <div className="result-intro transform-chain-intro"><span className="eyebrow">TRANSFORM CHAIN · 当前选中 {chainFrame.name}</span><h2>父子坐标系逐级连乘</h2><p>选中任意子坐标系，下方都会把「World 到父级」与「父级到子级」相乘，得到该坐标系相对于 World 的位姿。</p></div>}
-    {chainFrame && <div className="equation-strip"><Formula tex={`{}^{W}T_{${texId(chainParentId)}}\\;{}^{${texId(chainParentId)}}T_{${texId(chainFrame.id)}} = {}^{W}T_{${texId(chainFrame.id)}}`} /><span>列向量约定 · 右侧局部变换先作用</span></div>}
-    {chainFrame && <div className="matrix-layout secondary">
-      <MatrixView matrix={poseMatrix(worldPoseFor(frames, chainParentId))} label={`{}^{W}T_{${texId(chainParentId)}}`} compact />
-      <MatrixView matrix={poseMatrix(chainFrame.pose)} label={`{}^{${texId(chainParentId)}}T_{${texId(chainFrame.id)}}`} compact />
-      <MatrixView matrix={poseMatrix(worldPoseFor(frames, chainFrame.id))} label={`{}^{W}T_{${texId(chainFrame.id)}}`} compact />
-    </div>}
+    <div className="validation-line"><span className={matrixValid ? 'good' : 'warn'}>● {matrixValid ? '矩阵换算校验通过' : '矩阵换算异常'}</span><span>相对变换误差 {formatValue(relativeError)}</span><span>逆矩阵误差 {formatValue(inverseError)}</span><span>点换算误差 {formatValue(pointError)}</span><span>完整链连乘误差 {formatValue(chainError)}</span></div>
+    <div className="result-intro transform-chain-intro"><span className="eyebrow">TRANSFORM CHAIN · STEP {effectiveChainStep} / {Math.max(0, chainPath.length - 1)}</span><h2>累计到 {frames.find((frame) => frame.id === currentChainId)?.name ?? currentChainId}</h2><p>{chainPath.map((id) => frames.find((frame) => frame.id === id)?.name ?? id).join(' → ')}。右侧选择步骤，场景金色链路与下方矩阵同步推进。</p></div>
+    <div className="equation-strip"><Formula tex={effectiveChainStep === 0 ? '{}^{W}T_W=I' : `{}^{W}T_{${texId(currentChainId)}}=${chainLinks.map((frame) => `{}^{${texId(frame.parentId ?? 'world')}}T_{${texId(frame.id)}}`).join('\\;')}`} /><span>列向量约定 · 右侧局部变换先作用</span></div>
+    <div className="matrix-layout secondary chain-matrices">
+      {chainLinks.map((frame) => <MatrixView key={frame.id} matrix={poseMatrix(frame.pose)} label={`{}^{${texId(frame.parentId ?? 'world')}}T_{${texId(frame.id)}}`} compact />)}
+      <MatrixView matrix={poseMatrix(worldPoseFor(frames, currentChainId))} label={effectiveChainStep === 0 ? '{}^{W}T_W=I' : `{}^{W}T_{${texId(currentChainId)}}`} compact />
+    </div>
     <details className="advanced-results">
       <summary>查看旋转、四元数与逆变换 <span>展开详细校验</span></summary>
       <div className="readout-grid">

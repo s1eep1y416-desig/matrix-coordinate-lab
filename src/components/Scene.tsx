@@ -3,7 +3,7 @@ import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Line, OrbitControls } from '@react-three/drei';
 import { MOUSE, Plane, Vector3 } from 'three';
 import { forwardKinematics } from '../math/kinematics';
-import { useLabStore, worldPoseFor } from '../stores/labStore';
+import { framePathIds, useLabStore, worldPoseFor } from '../stores/labStore';
 import { CoordinateFrame, SceneLabel } from './CoordinateFrame';
 import { Robot } from './Robot';
 import { RotationScene } from './RotationScene';
@@ -42,17 +42,23 @@ function PointMarker({ point, onMove, label = 'Point P', color = '#b9ee72' }: { 
 }
 
 function FrameScene() {
-  const { frames, selectedFrameId, pointWorld, selectFrame, moveFrameWorld, setPointWorld, setFrameQuaternion } = useLabStore();
+  const { frames, selectedFrameId, pointWorld, chainStep, selectFrame, moveFrameWorld, setPointWorld, setFrameQuaternion } = useLabStore();
   const visibleFrames = frames.filter((frame) => frame.visible);
   const sourceWorld = worldPoseFor(frames, selectedFrameId);
+  const chainPath = framePathIds(frames, selectedFrameId);
+  const effectiveStep = Math.min(chainStep, Math.max(0, chainPath.length - 1));
+  const highlightedId = chainPath[effectiveStep];
   return <>
     {visibleFrames.filter((frame) => frame.id !== 'world').map((frame) => {
       const parent = worldPoseFor(frames, frame.parentId ?? 'world').position;
       const child = worldPoseFor(frames, frame.id).position;
-      return <Line key={`edge-${frame.id}`} points={[parent.toArray(), child.toArray()]} color="#d9b75f" opacity={0.4} transparent dashed dashSize={0.07} gapSize={0.07} lineWidth={1.5} />;
+      const pathIndex = chainPath.indexOf(frame.id);
+      const complete = pathIndex > 0 && pathIndex <= effectiveStep;
+      const pending = pathIndex > effectiveStep;
+      return <Line key={`edge-${frame.id}`} points={[parent.toArray(), child.toArray()]} color={complete ? '#f0cf72' : pending ? '#806e42' : '#55594d'} opacity={complete ? 0.95 : pending ? 0.35 : 0.22} transparent dashed={!complete} dashSize={0.07} gapSize={0.07} lineWidth={complete ? 3 : 1.5} />;
     })}
     {visibleFrames.map((frame) => <CoordinateFrame
-      key={frame.id} pose={worldPoseFor(frames, frame.id)} label={frame.name} selected={frame.id === selectedFrameId}
+      key={frame.id} pose={worldPoseFor(frames, frame.id)} label={frame.name} selected={frame.id === selectedFrameId} highlighted={frame.id === highlightedId}
       accent={frame.id === 'world' ? '#d7dbe3' : ['#b18cff', '#ffb55d', '#5fd4cf', '#f27caa', '#d2ee62'][(Math.max(0, frame.id.charCodeAt(0) - 65)) % 5]}
       length={frame.id === 'world' ? 1.6 : 1.02} subtle={frame.id === 'world'} draggable={frame.id !== 'world'}
       onSelect={() => selectFrame(frame.id)} onMoveWorld={(point) => moveFrameWorld(frame.id, point)}

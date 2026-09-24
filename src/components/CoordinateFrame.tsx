@@ -17,6 +17,7 @@ interface CoordinateFrameProps {
   accent?: string;
   length?: number;
   selected?: boolean;
+  highlighted?: boolean;
   draggable?: boolean;
   subtle?: boolean;
   onSelect?: () => void;
@@ -30,7 +31,7 @@ export function SceneLabel({ label, position, color = '#e6eadf', fontSize = 0.17
   </Billboard>;
 }
 
-export function CoordinateFrame({ pose, label, accent = '#d7dbe3', length = 0.85, selected, draggable, subtle, onSelect, onMoveWorld, onRotateWorld }: CoordinateFrameProps) {
+export function CoordinateFrame({ pose, label, accent = '#d7dbe3', length = 0.85, selected, highlighted, draggable, subtle, onSelect, onMoveWorld, onRotateWorld }: CoordinateFrameProps) {
   const drag = useRef<{ pointerId: number; plane: Plane; startHit: Vector3; startOrigin: Vector3 } | null>(null);
   const axisDrag = useRef<{ pointerId: number; plane: Plane; origin: Vector3; axis: Vector3; quaternion: Quaternion } | null>(null);
   const pointerDown = (event: ThreeEvent<PointerEvent>) => {
@@ -97,6 +98,7 @@ export function CoordinateFrame({ pose, label, accent = '#d7dbe3', length = 0.85
       <meshBasicMaterial color={accent} transparent opacity={draggable ? 0 : 1} depthWrite={!draggable} />
     </mesh>
     {draggable && <mesh><sphereGeometry args={[selected ? 0.035 : 0.028, 16, 10]} /><meshBasicMaterial color={accent} /></mesh>}
+    {highlighted && <mesh><torusGeometry args={[0.09, 0.012, 8, 28]} /><meshBasicMaterial color="#f0cf72" transparent opacity={0.95} depthTest={false} /></mesh>}
     <SceneLabel label={label} position={[0.14, 0, -0.19]} color={accent} fontSize={0.15} />
   </group>;
 }

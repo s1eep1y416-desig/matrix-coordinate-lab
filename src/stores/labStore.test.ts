@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { sameOrientation } from '../math/quaternion';
 import { matrixMaxError, poseMatrix } from '../math/transform';
-import { relativeFramePose, useLabStore, worldPoseFor } from './labStore';
+import { framePathIds, relativeFramePose, useLabStore, worldPoseFor } from './labStore';
 
 beforeEach(() => useLabStore.getState().reset());
 
@@ -57,6 +57,25 @@ describe('rotation playback state', () => {
 });
 
 describe('frame limits and hierarchy', () => {
+  it('returns the complete World → selected ancestry for arbitrary depth', () => {
+    const store = useLabStore.getState();
+    store.addFrame('A');
+    store.addFrame('B');
+    const state = useLabStore.getState();
+    expect(framePathIds(state.frames, 'C')).toEqual(['world', 'A', 'B', 'C']);
+    expect(framePathIds(state.frames, 'world')).toEqual(['world']);
+  });
+
+  it('clamps chain replay steps and returns to the full chain after selection changes', () => {
+    const store = useLabStore.getState();
+    store.setChainStep(-4);
+    expect(useLabStore.getState().chainStep).toBe(0);
+    store.setChainStep(20);
+    expect(useLabStore.getState().chainStep).toBe(7);
+    store.selectFrame('A');
+    expect(useLabStore.getState().chainStep).toBe(99);
+  });
+
   it('clamps both precise input and 3D dragging to the same position limit', () => {
     const store = useLabStore.getState();
     store.setConstraint('A', 'tx', { min: -0.5, max: 0.5 });

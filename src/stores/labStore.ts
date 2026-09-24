@@ -48,6 +48,20 @@ export function relativeFramePose(frames: FrameNode[], targetId: string, sourceI
   return relativePose(worldPoseFor(frames, targetId), worldPoseFor(frames, sourceId));
 }
 
+/** Ordered ancestry from World to the requested frame. Invalid or cyclic paths stop safely. */
+export function framePathIds(frames: FrameNode[], frameId: string): string[] {
+  if (frameId === 'world') return ['world'];
+  const reversed: string[] = [];
+  const seen = new Set<string>();
+  let current = frames.find((frame) => frame.id === frameId);
+  while (current && current.id !== 'world' && !seen.has(current.id)) {
+    seen.add(current.id);
+    reversed.push(current.id);
+    current = frames.find((frame) => frame.id === current?.parentId);
+  }
+  return current?.id === 'world' ? ['world', ...reversed.reverse()] : reversed.reverse();
+}
+
 function constrainPose(frame: FrameNode, candidate: Pose, order: EulerOrder, allowLocked = false): Pose {
   const nextPosition = candidate.position.clone();
   const currentAngles = eulerFromQuaternion(frame.pose.quaternion, order);
@@ -87,6 +101,7 @@ interface LabState {
   rotationSense: 'active' | 'passive';
   rotationProgress: number;
   rotationPlaying: boolean;
+  chainStep: number;
   fkStep: number;
   ikTarget: Vector3;
   ikDamping: number;
@@ -119,6 +134,7 @@ interface LabState {
   playRotation: () => void;
   pauseRotation: () => void;
   advanceRotation: (seconds: number) => void;
+  setChainStep: (step: number) => void;
   setFkStep: (step: number) => void;
   setIkTarget: (target: Vector3) => void;
   setIkTargetCoordinate: (axis: 0 | 1 | 2, value: number) => number;
@@ -135,12 +151,12 @@ export const useLabStore = create<LabState>((set, get) => ({
   selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose',
   pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45],
   rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', fkStep: 3,
-  rotationProgress: 2, rotationPlaying: false,
+  rotationProgress: 2, rotationPlaying: false, chainStep: 99,
   ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5,
   cameraResetKey: 0,
   setMode: (mode) => set({ mode, rotationPlaying: false }),
-  selectFrame: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { selectedFrameId: id, sourceId: id, targetId: state.targetId === id ? 'world' : state.targetId } : {}),
-  setSource: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { sourceId: id, selectedFrameId: id } : {}),
+  selectFrame: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { selectedFrameId: id, sourceId: id, targetId: state.targetId === id ? 'world' : state.targetId, chainStep: 99 } : {}),
+  setSource: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { sourceId: id, selectedFrameId: id, chainStep: 99 } : {}),
   setTarget: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { targetId: id } : {}),
   setEulerOrder: (eulerOrder) => set((state) => {
     if (state.eulerOrderBehavior === 'pose' || eulerOrder === state.eulerOrder) return { eulerOrder };
@@ -207,7 +223,7 @@ export const useLabStore = create<LabState>((set, get) => ({
     const number = state.nextFrameNumber;
     const id = String.fromCharCode(64 + number);
     const frame: FrameNode = { id, name: `Frame ${id}`, parentId: parent.id, pose: makePose(new Vector3(1.1, 0.25, 0.35), quaternionFromEuler([0, 0, 15], state.eulerOrder)), constraints: frameConstraints(), visible: true };
-    return { frames: [...state.frames, frame], nextFrameNumber: number + 1, selectedFrameId: id, sourceId: id, targetId: 'world' };
+    return { frames: [...state.frames, frame], nextFrameNumber: number + 1, selectedFrameId: id, sourceId: id, targetId: 'world', chainStep: 99 };
   }),
   reparentFrame: (id, parentId) => {
     const state = get(), frame = state.frames.find((item) => item.id === id);
@@ -219,11 +235,11 @@ export const useLabStore = create<LabState>((set, get) => ({
     }
     const oldWorld = worldPoseFor(state.frames, id), parentWorld = worldPoseFor(state.frames, parentId);
     const local = composePoses(inversePose(parentWorld), oldWorld);
-    set({ frames: changeFrame(state.frames, id, (item) => ({ ...item, parentId, pose: constrainPose(item, local, state.eulerOrder) })) });
+    set({ frames: changeFrame(state.frames, id, (item) => ({ ...item, parentId, pose: constrainPose(item, local, state.eulerOrder) })), chainStep: 99 });
   },
   deleteFrame: (id) => set((state) => {
     if (id === 'world' || id === 'A' || state.frames.some((frame) => frame.parentId === id)) return {};
-    return { frames: state.frames.filter((frame) => frame.id !== id), selectedFrameId: 'A', sourceId: 'A', targetId: state.targetId === id ? 'world' : state.targetId };
+    return { frames: state.frames.filter((frame) => frame.id !== id), selectedFrameId: 'A', sourceId: 'A', targetId: state.targetId === id ? 'world' : state.targetId, chainStep: 99 };
   }),
   toggleFrame: (id) => set((state) => ({ frames: changeFrame(state.frames, id, (frame) => ({ ...frame, visible: !frame.visible })) })),
   setPointReference: (pointReference) => set({ pointReference }),
@@ -260,6 +276,7 @@ export const useLabStore = create<LabState>((set, get) => ({
     const rotationProgress = Math.min(2, state.rotationProgress + seconds / 2);
     return { rotationProgress, rotationPlaying: rotationProgress < 2 };
   }),
+  setChainStep: (step) => { if (Number.isFinite(step)) set({ chainStep: clamp(Math.round(step), 0, 7) }); },
   setFkStep: (fkStep) => set({ fkStep: clamp(Math.round(fkStep), 0, 3) }),
   setIkTarget: (ikTarget) => set({ ikTarget: ikTarget.clone(), ikIterations: 0 }),
   setIkTargetCoordinate: (axis, value) => {
@@ -276,5 +293,5 @@ export const useLabStore = create<LabState>((set, get) => ({
   }),
   setPinStep: (pinStep) => set({ pinStep: clamp(Math.round(pinStep), 0, 5) }),
   resetCamera: () => set((state) => ({ cameraResetKey: state.cameraResetKey + 1 })),
-  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', rotationProgress: 2, rotationPlaying: false, fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
+  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', rotationProgress: 2, rotationPlaying: false, chainStep: 99, fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
 }));
