@@ -32,7 +32,7 @@ describe('rotation playback state', () => {
     store.setRotationDemo('X', -90);
     expect(useLabStore.getState()).toMatchObject({ rotationX: -90, rotationPlaying: false });
     store.playRotation();
-    store.setMode('chain');
+    store.setMode('fk');
     store.advanceRotation(2);
     expect(useLabStore.getState()).toMatchObject({ rotationProgress: 0.75, rotationPlaying: false });
     store.playRotation();

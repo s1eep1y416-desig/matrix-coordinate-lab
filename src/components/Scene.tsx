@@ -84,7 +84,7 @@ function WorldGrid() {
   </>;
 }
 
-function SceneCamera({ mode, resetKey }: { mode: 'frames' | 'rotation' | 'chain' | 'fk' | 'ik' | 'pinocchio'; resetKey: number }) {
+function SceneCamera({ mode, resetKey }: { mode: 'frames' | 'rotation' | 'fk' | 'ik' | 'pinocchio'; resetKey: number }) {
   const { camera, controls, invalidate } = useThree();
   useEffect(() => {
     const robotMode = mode === 'fk' || mode === 'ik' || mode === 'pinocchio';
@@ -118,11 +118,11 @@ export function Scene() {
       <OrbitControls makeDefault target={[0.9, 0.5, 0.45]} enablePan={false} minDistance={2.5} maxDistance={18} mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.ROTATE, RIGHT: MOUSE.DOLLY }} />
       <SceneCamera mode={mode} resetKey={cameraResetKey} />
     </Canvas>
-    {(mode === 'frames' || mode === 'chain') && <>
+    {mode === 'frames' && <>
       <div className="scene-axis-legend" aria-label="坐标轴颜色：X 红、Y 绿、Z 蓝"><span className="x">X</span><span className="y">Y</span><span className="z">Z</span></div>
       <div className="scene-route"><span>源</span><strong>{frameName(sourceId)}</strong><b>→</b><span>目标</span><strong>{frameName(targetId)}</strong></div>
     </>}
     <button className="scene-reset-view" onClick={resetCamera}>重置视角</button>
-    <div className="scene-overlay"><span className="scene-live">● 实时同步</span><span>{mode === 'frames' || mode === 'chain' ? '中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放' : mode === 'ik' ? '中键转视角 · 左键拖动 Target · 滚轮缩放' : '中键转视角 · 右侧调节参数 · 滚轮缩放'}</span></div>
+    <div className="scene-overlay"><span className="scene-live">● 实时同步</span><span>{mode === 'frames' ? '中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放' : mode === 'ik' ? '中键转视角 · 左键拖动 Target · 滚轮缩放' : '中键转视角 · 右侧调节参数 · 滚轮缩放'}</span></div>
   </div>;
 }

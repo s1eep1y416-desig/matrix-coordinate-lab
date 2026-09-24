@@ -15,9 +15,8 @@ import 'katex/dist/katex.min.css';
 import './styles.css';
 
 const NAV: { id: LabMode; label: string; short: string }[] = [
-  { id: 'frames', label: '坐标系与点', short: 'Frames' },
+  { id: 'frames', label: '坐标系与变换', short: 'Frames + Transforms' },
   { id: 'rotation', label: '旋转矩阵', short: 'Rotation' },
-  { id: 'chain', label: '变换链', short: 'Transforms' },
   { id: 'fk', label: '3-Link FK', short: 'Kinematics' },
   { id: 'ik', label: '逆运动学', short: 'IK Solver' },
   { id: 'pinocchio', label: 'Pinocchio', short: 'Workflow' },
@@ -300,7 +299,7 @@ function PinocchioResults() {
 }
 
 function FrameResults() {
-  const { frames, selectedFrameId, sourceId, targetId, eulerOrder, pointWorld, mode } = useLabStore();
+  const { frames, selectedFrameId, sourceId, targetId, eulerOrder, pointWorld } = useLabStore();
   const T_W_selected = worldPoseFor(frames, selectedFrameId);
   const T_selected_W = inversePose(T_W_selected);
   const T_target_source = relativeFramePose(frames, targetId, sourceId);
@@ -312,15 +311,16 @@ function FrameResults() {
   const axisAngle = axisAngleFromQuaternion(T_W_selected.quaternion);
   const validation = validateRotation(T_W_selected.quaternion);
   const quaternion = T_W_selected.quaternion;
-  const frameB = frames.find((frame) => frame.id === 'B');
+  const chainFrame = frames.find((frame) => frame.id === selectedFrameId && frame.id !== 'world');
+  const chainParentId = chainFrame?.parentId ?? 'world';
   const relativeMatrix = poseMatrix(T_target_source);
   const independentRelativeMatrix = poseMatrix(T_W_target).invert().multiply(poseMatrix(T_W_source));
   const relativeError = matrixMaxError(relativeMatrix, independentRelativeMatrix);
   const inverseError = matrixMaxError(poseMatrix(T_selected_W), poseMatrix(T_W_selected).invert());
   const pointError = pSource.clone().applyMatrix4(independentRelativeMatrix).distanceTo(pTarget);
-  const chainError = frameB ? matrixMaxError(
-    poseMatrix(worldPoseFor(frames, 'B')),
-    poseMatrix(worldPoseFor(frames, frameB.parentId ?? 'world')).multiply(poseMatrix(frameB.pose)),
+  const chainError = chainFrame ? matrixMaxError(
+    poseMatrix(worldPoseFor(frames, chainFrame.id)),
+    poseMatrix(worldPoseFor(frames, chainParentId)).multiply(poseMatrix(chainFrame.pose)),
   ) : 0;
   const maxError = Math.max(relativeError, inverseError, pointError, chainError);
   const matrixValid = maxError < 1e-8 && validation.valid && validateHomogeneous(relativeMatrix);
@@ -336,12 +336,13 @@ function FrameResults() {
     <div className="matrix-layout core-matrices">
       <MatrixView matrix={relativeMatrix} label={`{}^{${texId(targetId)}}T_{${texId(sourceId)}}`} />
     </div>
-    <div className="validation-line"><span className={matrixValid ? 'good' : 'warn'}>● {matrixValid ? '矩阵换算校验通过' : '矩阵换算异常'}</span><span>相对变换误差 {formatValue(relativeError)}</span><span>逆矩阵误差 {formatValue(inverseError)}</span><span>点换算误差 {formatValue(pointError)}</span>{frameB && <span>父子连乘误差 {formatValue(chainError)}</span>}</div>
-    {mode === 'chain' && frameB && <div className="equation-strip"><Formula tex={`{}^{W}T_{${texId(frameB.parentId ?? 'world')}}\\;{}^{${texId(frameB.parentId ?? 'world')}}T_B = {}^{W}T_B`} /><span>父子变换连乘</span></div>}
-    {mode === 'chain' && frameB && <div className="matrix-layout secondary">
-      <MatrixView matrix={poseMatrix(worldPoseFor(frames, frameB.parentId ?? 'world'))} label={`{}^{W}T_{${texId(frameB.parentId ?? 'world')}}`} compact />
-      <MatrixView matrix={poseMatrix(frameB.pose)} label={`{}^{${texId(frameB.parentId ?? 'world')}}T_B`} compact />
-      <MatrixView matrix={poseMatrix(worldPoseFor(frames, 'B'))} label="{}^{W}T_B" compact />
+    <div className="validation-line"><span className={matrixValid ? 'good' : 'warn'}>● {matrixValid ? '矩阵换算校验通过' : '矩阵换算异常'}</span><span>相对变换误差 {formatValue(relativeError)}</span><span>逆矩阵误差 {formatValue(inverseError)}</span><span>点换算误差 {formatValue(pointError)}</span>{chainFrame && <span>父子连乘误差 {formatValue(chainError)}</span>}</div>
+    {chainFrame && <div className="result-intro transform-chain-intro"><span className="eyebrow">TRANSFORM CHAIN · 当前选中 {chainFrame.name}</span><h2>父子坐标系逐级连乘</h2><p>选中任意子坐标系，下方都会把「World 到父级」与「父级到子级」相乘，得到该坐标系相对于 World 的位姿。</p></div>}
+    {chainFrame && <div className="equation-strip"><Formula tex={`{}^{W}T_{${texId(chainParentId)}}\\;{}^{${texId(chainParentId)}}T_{${texId(chainFrame.id)}} = {}^{W}T_{${texId(chainFrame.id)}}`} /><span>列向量约定 · 右侧局部变换先作用</span></div>}
+    {chainFrame && <div className="matrix-layout secondary">
+      <MatrixView matrix={poseMatrix(worldPoseFor(frames, chainParentId))} label={`{}^{W}T_{${texId(chainParentId)}}`} compact />
+      <MatrixView matrix={poseMatrix(chainFrame.pose)} label={`{}^{${texId(chainParentId)}}T_{${texId(chainFrame.id)}}`} compact />
+      <MatrixView matrix={poseMatrix(worldPoseFor(frames, chainFrame.id))} label={`{}^{W}T_{${texId(chainFrame.id)}}`} compact />
     </div>}
     <details className="advanced-results">
       <summary>查看旋转、四元数与逆变换 <span>展开详细校验</span></summary>
@@ -418,7 +419,7 @@ export default function App() {
       <nav className="mode-nav" aria-label="学习模块">{NAV.map((item, index) => <button key={item.id} className={mode === item.id ? 'active' : ''} onClick={() => setMode(item.id)}><small>0{index + 1}</small>{item.label}</button>)}</nav>
       <button className="reset-button" onClick={reset} title="重置全部场景">重置</button></header>
     <main className="workspace">
-      <section className="visual-workspace"><div className="scene-heading"><div><span className="eyebrow">INTERACTIVE 3D</span><h1>{NAV.find((item) => item.id === mode)?.label}</h1></div><span className="heading-note">{mode === 'ik' ? '拖动目标点，用 Jacobian 逐步逼近' : mode === 'pinocchio' ? '沿数据流查看 URDF、FK、SE(3) 与可视化' : mode === 'fk' ? '拖动关节角，看连杆与矩阵一起运动' : mode === 'rotation' ? '调节 Rx、Ry、Rz，对比旋转次序与主动 / 被动视角' : '拖动场景中的坐标系，观察数学如何改变'}</span></div><Scene />
+      <section className="visual-workspace"><div className="scene-heading"><div><span className="eyebrow">INTERACTIVE 3D</span><h1>{NAV.find((item) => item.id === mode)?.label}</h1></div><span className="heading-note">{mode === 'ik' ? '拖动目标点，用 Jacobian 逐步逼近' : mode === 'pinocchio' ? '沿数据流查看 URDF、FK、SE(3) 与可视化' : mode === 'fk' ? '拖动关节角，看连杆与矩阵一起运动' : mode === 'rotation' ? '调节 Rx、Ry、Rz，对比旋转次序与主动 / 被动视角' : '拖动坐标系与点，查看相对变换和父子矩阵链'}</span></div><Scene />
         {mode === 'rotation' ? <RotationResults /> : mode === 'fk' ? <FKResults /> : mode === 'ik' ? <IKResults /> : mode === 'pinocchio' ? <PinocchioResults /> : <FrameResults />}
       </section>
       <aside className="control-panel" aria-label="实验操作栏"><div className="control-heading"><span className="eyebrow">CONTROLS</span><strong>实验操作</strong><span>{NAV.find((item) => item.id === mode)?.short}</span></div>

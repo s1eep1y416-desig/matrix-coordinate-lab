@@ -7,7 +7,7 @@ import type { Axis, RotationPair } from '../math/rotation';
 import { ikStep, solveIK } from '../math/inverseKinematics';
 
 export type DofKey = 'tx' | 'ty' | 'tz' | 'rx' | 'ry' | 'rz';
-export type LabMode = 'frames' | 'rotation' | 'chain' | 'fk' | 'ik' | 'pinocchio';
+export type LabMode = 'frames' | 'rotation' | 'fk' | 'ik' | 'pinocchio';
 export type PointReference = 'world' | 'frame';
 export type EulerOrderBehavior = 'pose' | 'angles';
 
@@ -138,12 +138,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   rotationProgress: 2, rotationPlaying: false,
   ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5,
   cameraResetKey: 0,
-  setMode: (mode) => {
-    if (mode === 'chain' && !get().frames.some((frame) => frame.id === 'B')) {
-      const B: FrameNode = { id: 'B', name: 'Frame B', parentId: 'A', pose: makePose(new Vector3(1.25, 0.15, 0.55), quaternionFromEuler([20, -10, 18], get().eulerOrder)), constraints: frameConstraints(), visible: true };
-      set((state) => ({ frames: [...state.frames, B], nextFrameNumber: Math.max(state.nextFrameNumber, 3), mode, selectedFrameId: 'B', sourceId: 'B', targetId: 'world', rotationPlaying: false }));
-    } else set({ mode, rotationPlaying: false });
-  },
+  setMode: (mode) => set({ mode, rotationPlaying: false }),
   selectFrame: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { selectedFrameId: id, sourceId: id, targetId: state.targetId === id ? 'world' : state.targetId } : {}),
   setSource: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { sourceId: id, selectedFrameId: id } : {}),
   setTarget: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { targetId: id } : {}),
