@@ -4,7 +4,7 @@ import { EULER_ORDERS, eulerFromQuaternion, quaternionFromEuler } from './euler'
 import { axisAngleFromQuaternion, quaternionFromAxisAngle, sameOrientation } from './quaternion';
 import { forwardKinematics, LINK_LENGTHS } from './kinematics';
 import { finiteDifferenceJacobian, ikStep, positionJacobian, solveIK } from './inverseKinematics';
-import { rotationAbout, rotationProduct, validateRotation, validateRotationMatrix } from './rotation';
+import { compareRotationOrder, rotationAbout, rotationMatrix, rotationProduct, validateRotation, validateRotationMatrix, type RotationPair } from './rotation';
 import { composePoses, identityPose, inversePose, inverseTransformPoint, makePose, matrixMaxError, matrixRows, poseMatrix, relativePose, transformPoint, validateHomogeneous } from './transform';
 
 const expectVector = (actual: Vector3, expected: Vector3, tolerance = 1e-9) => {
@@ -45,6 +45,21 @@ describe('rotation representations', () => {
     expect(validation.valid).toBe(true);
     expect(validation.determinant).toBeCloseTo(1, 10);
     expect(validateRotationMatrix(new Matrix4().makeScale(2, 1, 1)).valid).toBe(false);
+  });
+
+  it.each(['XY', 'YZ', 'ZX'] as RotationPair[])('keeps %s comparison, vector motion and matrix order consistent', (pair) => {
+    const angles = { X: 90, Y: 90, Z: 90 };
+    const comparison = compareRotationOrder(angles, pair);
+    const first = rotationAbout(comparison.firstAxis, angles[comparison.firstAxis]);
+    const second = rotationAbout(comparison.secondAxis, angles[comparison.secondAxis]);
+    expect(sameOrientation(comparison.forward, rotationProduct(first, second))).toBe(true);
+    expect(sameOrientation(comparison.reverse, rotationProduct(second, first))).toBe(true);
+    expect(validateRotation(comparison.forward).valid).toBe(true);
+    expect(validateRotation(comparison.reverse).valid).toBe(true);
+    expect(comparison.forward.angleTo(comparison.reverse)).toBeGreaterThan(0.1);
+    const vector = new Vector3(0.3, 0.5, 0.8);
+    const byMatrices = vector.clone().applyMatrix4(rotationMatrix(first).multiply(rotationMatrix(second)));
+    expectVector(vector.clone().applyQuaternion(comparison.forward), byMatrices);
   });
 
   it('checks the 3×3 rotation block independently of homogeneous translation and last row', () => {

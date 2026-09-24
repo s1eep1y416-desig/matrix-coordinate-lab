@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { eulerFromQuaternion, quaternionFromEuler, type EulerOrder } from '../math/euler';
 import { composePoses, identityPose, inversePose, makePose, relativePose, transformPoint, type Pose } from '../math/transform';
 import type { JointAngles } from '../math/kinematics';
+import type { Axis, RotationPair } from '../math/rotation';
 import { ikStep, solveIK } from '../math/inverseKinematics';
 
 export type DofKey = 'tx' | 'ty' | 'tz' | 'rx' | 'ry' | 'rz';
@@ -81,6 +82,8 @@ interface LabState {
   robotAngles: JointAngles;
   rotationX: number;
   rotationY: number;
+  rotationZ: number;
+  rotationPair: RotationPair;
   rotationSense: 'active' | 'passive';
   fkStep: number;
   ikTarget: Vector3;
@@ -107,7 +110,8 @@ interface LabState {
   setPointCoordinate: (referenceId: string, axis: 0 | 1 | 2, value: number) => number;
   setPointWorld: (position: Vector3) => void;
   setRobotAngle: (axis: 0 | 1 | 2, value: number) => void;
-  setRotationDemo: (axis: 'X' | 'Y', value: number) => void;
+  setRotationDemo: (axis: Axis, value: number) => void;
+  setRotationPair: (pair: RotationPair) => void;
   setRotationSense: (sense: 'active' | 'passive') => void;
   setFkStep: (step: number) => void;
   setIkTarget: (target: Vector3) => void;
@@ -124,7 +128,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2,
   selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose',
   pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45],
-  rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3,
+  rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', fkStep: 3,
   ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5,
   cameraResetKey: 0,
   setMode: (mode) => {
@@ -236,7 +240,11 @@ export const useLabStore = create<LabState>((set, get) => ({
     robotAngles[axis] = clamp(value, -180, 180);
     return { robotAngles, ikIterations: state.mode === 'ik' ? 0 : state.ikIterations };
   }),
-  setRotationDemo: (axis, value) => set({ [axis === 'X' ? 'rotationX' : 'rotationY']: clamp(value, -180, 180) }),
+  setRotationDemo: (axis, value) => {
+    if (!Number.isFinite(value)) return;
+    set({ [axis === 'X' ? 'rotationX' : axis === 'Y' ? 'rotationY' : 'rotationZ']: clamp(value, -180, 180) });
+  },
+  setRotationPair: (rotationPair) => set({ rotationPair }),
   setRotationSense: (rotationSense) => set({ rotationSense }),
   setFkStep: (fkStep) => set({ fkStep: clamp(Math.round(fkStep), 0, 3) }),
   setIkTarget: (ikTarget) => set({ ikTarget: ikTarget.clone(), ikIterations: 0 }),
@@ -254,5 +262,5 @@ export const useLabStore = create<LabState>((set, get) => ({
   }),
   setPinStep: (pinStep) => set({ pinStep: clamp(Math.round(pinStep), 0, 5) }),
   resetCamera: () => set((state) => ({ cameraResetKey: state.cameraResetKey + 1 })),
-  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationSense: 'active', fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
+  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
 }));
