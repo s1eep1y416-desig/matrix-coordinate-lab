@@ -201,7 +201,7 @@ function FKControls() {
     </section>
     <section className="control-card"><PaneTitle eyebrow="CHAIN REPLAY" title="逐级查看矩阵链" />
       <div className="step-buttons">{['base', 'J1', 'J2', 'tool'].map((label, index) => <button key={label} className={fkStep === index ? 'active' : ''} onClick={() => setFkStep(index)}>{label}</button>)}</div>
-      <p className="fine-print">选择一步，场景只显示计算到该级的连杆和坐标系。</p>
+      <p className="fine-print">选择一步，场景只显示计算到该级的运动学骨架和坐标系；真实外形将在导入你的 URDF 后替换。</p>
     </section>
   </>;
 }
@@ -264,7 +264,7 @@ function IKResults() {
   const manipulability = jacobianManipulability(jacobian);
   const converged = errorNorm < 1e-3;
   return <div className="results-stack">
-    <div className="result-intro"><span className="eyebrow">INVERSE KINEMATICS · POSITION</span><h2>目标位置 → 关节角</h2><p>当前是教学用 3 关节模型。绿色点是目标，金色机械臂是当前解；误差线会随每次 Jacobian 迭代缩短。</p></div>
+    <div className="result-intro"><span className="eyebrow">INVERSE KINEMATICS · POSITION</span><h2>目标位置 → 关节角</h2><p>当前是教学用 3 关节运动学骨架。绿色点是目标，金色线是当前解；误差线会随每次 Jacobian 迭代缩短。</p></div>
     <div className="equation-strip"><Formula tex="e=p_{target}-p(q),\quad \Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" /><span>DLS + 下降线搜索</span></div>
     <div className="readout-grid"><VectorReadout label="目标位置 · m" values={ikTarget.toArray()} /><VectorReadout label="当前末端 · m" values={fk.T_base_tool.position.toArray()} /><VectorReadout label="Cartesian error · m" values={error.toArray()} /><VectorReadout label="当前关节角 · °" values={robotAngles} unit="°" /></div>
     <div className="validation-line"><span className={converged ? 'good' : 'warn'}>● {converged ? '已收敛' : reachable ? '等待迭代' : '目标超出最大臂展'}</span><span>‖e‖ = {formatValue(errorNorm)} m</span><span>|det(J)| = {formatValue(manipulability)}</span><span>迭代 {ikIterations}</span></div>
@@ -380,7 +380,7 @@ function FKResults() {
   const chainError = Math.max(...finalMatrix.elements.map((value, index) => Math.abs(value - chainMatrix.elements[index])));
   const fkValid = chainError < 1e-8 && validateRotation(q).valid && validateHomogeneous(finalMatrix);
   return <div className="results-stack">
-    <div className="result-intro"><span className="eyebrow">FORWARD KINEMATICS</span><h2>关节角 → 末端位姿</h2><p>当前是教学用 3 关节模型；每个关节改变后，下游连杆、坐标轴与矩阵链实时重算。真实几何将在你提供 URDF 后替换。</p></div>
+    <div className="result-intro"><span className="eyebrow">FORWARD KINEMATICS</span><h2>关节角 → 末端位姿</h2><p>当前只显示教学用 3 关节运动学骨架；每个关节改变后，下游坐标轴与矩阵链实时重算。真实几何将在你提供 URDF 后替换。</p></div>
     <div className="equation-strip"><Formula tex="{}^{\mathrm{base}}T_{\mathrm{tool}} = {}^{\mathrm{base}}T_{\mathrm{link1}}\;{}^{\mathrm{link1}}T_{\mathrm{link2}}\;{}^{\mathrm{link2}}T_{\mathrm{tool}}" /><span>q1 → q2 → q3</span></div>
     <div className="matrix-layout"><MatrixView matrix={finalMatrix} label="{}^{\mathrm{base}}T_{\mathrm{tool}}" />
       <MatrixView matrix={rotationMatrix(fk.T_base_tool.quaternion)} size={3} label="{}^{\mathrm{base}}R_{\mathrm{tool}}" /></div>

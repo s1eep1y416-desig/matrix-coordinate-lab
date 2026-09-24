@@ -53,7 +53,8 @@ function FrameScene() {
     })}
     {visibleFrames.map((frame) => <CoordinateFrame
       key={frame.id} pose={worldPoseFor(frames, frame.id)} label={frame.name} selected={frame.id === selectedFrameId}
-      length={frame.id === 'world' ? 1.25 : 1.02} subtle={frame.id === 'world'} draggable={frame.id !== 'world'}
+      accent={frame.id === 'world' ? '#d7dbe3' : ['#b18cff', '#ffb55d', '#5fd4cf', '#f27caa', '#d2ee62'][(Math.max(0, frame.id.charCodeAt(0) - 65)) % 5]}
+      length={frame.id === 'world' ? 1.6 : 1.02} subtle={frame.id === 'world'} draggable={frame.id !== 'world'}
       onSelect={() => selectFrame(frame.id)} onMoveWorld={(point) => moveFrameWorld(frame.id, point)}
       onRotateWorld={(quaternion) => {
         const parent = worldPoseFor(useLabStore.getState().frames, frame.parentId ?? 'world');

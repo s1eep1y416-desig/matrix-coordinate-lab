@@ -14,6 +14,7 @@ const axes = [
 interface CoordinateFrameProps {
   pose: Pose;
   label: string;
+  accent?: string;
   length?: number;
   selected?: boolean;
   draggable?: boolean;
@@ -30,7 +31,7 @@ export function SceneLabel({ label, position, color = '#e6eadf', fontSize = 0.17
   </Billboard>;
 }
 
-export function CoordinateFrame({ pose, label, length = 0.85, selected, draggable, subtle, onSelect, onMoveWorld, onRotateWorld }: CoordinateFrameProps) {
+export function CoordinateFrame({ pose, label, accent = '#d7dbe3', length = 0.85, selected, draggable, subtle, onSelect, onMoveWorld, onRotateWorld }: CoordinateFrameProps) {
   const drag = useRef<{ pointerId: number; plane: Plane; startHit: Vector3; startOrigin: Vector3 } | null>(null);
   const axisDrag = useRef<{ pointerId: number; plane: Plane; origin: Vector3; axis: Vector3; quaternion: Quaternion } | null>(null);
   const pointerDown = (event: ThreeEvent<PointerEvent>) => {
@@ -81,21 +82,22 @@ export function CoordinateFrame({ pose, label, length = 0.85, selected, draggabl
   };
   return <group position={pose.position.toArray()} quaternion={pose.quaternion.clone()}>
     {axes.map((axis) => <group key={axis.label}>
-      <Line points={[[0, 0, 0], axis.point.map((number) => number * length) as [number, number, number]]} color={axis.color} lineWidth={subtle ? 1.6 : 3} transparent opacity={subtle ? 0.65 : 1} />
-      <mesh position={axis.point.map((number) => number * length * 0.82) as [number, number, number]} rotation={axis.tipRotation}>
-        <coneGeometry args={[subtle ? 0.045 : 0.068, subtle ? 0.13 : 0.18, 12]} />
-        <meshBasicMaterial color={axis.color} transparent opacity={subtle ? 0.75 : 1} />
+      <Line points={[[0, 0, 0], axis.point.map((number) => number * (length - 0.11)) as [number, number, number]]} color={axis.color} lineWidth={selected ? 2.7 : subtle ? 1.7 : 2} transparent opacity={subtle ? 0.78 : 1} />
+      <mesh position={axis.point.map((number) => number * (length - 0.055)) as [number, number, number]} rotation={axis.tipRotation}>
+        <coneGeometry args={[0.048, 0.11, 12]} />
+        <meshBasicMaterial color={axis.color} transparent opacity={subtle ? 0.78 : 1} />
       </mesh>
       <mesh position={axis.point.map((number) => number * length) as [number, number, number]}
         onPointerDown={(event) => axisDown(event, axis.point)} onPointerMove={axisMove} onPointerUp={axisEnd} onPointerCancel={axisEnd}>
-        <sphereGeometry args={[draggable ? 0.095 : subtle ? 0.035 : 0.05, 16, 12]} /><meshBasicMaterial color={axis.color} />
+        <sphereGeometry args={[draggable ? 0.14 : 0.045, 12, 8]} /><meshBasicMaterial color={axis.color} transparent opacity={draggable ? 0 : 0.01} depthWrite={false} />
       </mesh>
-      {(!subtle || label === 'World') && <SceneLabel label={axis.label} position={axis.point.map((number) => number * (length + 0.13)) as [number, number, number]} color={axis.color} fontSize={0.18} />}
+      {(selected || label === 'World') && <SceneLabel label={axis.label.toLowerCase()} position={axis.point.map((number) => number * (length + 0.12)) as [number, number, number]} color={axis.color} fontSize={0.17} />}
     </group>)}
     <mesh onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd} onClick={(event) => { event.stopPropagation(); onSelect?.(); }}>
-      <sphereGeometry args={[selected ? 0.17 : 0.14, 22, 16]} />
-      <meshStandardMaterial color={selected ? '#d9b75f' : subtle ? '#a7afb2' : '#d7dde2'} emissive={selected ? '#8c6c20' : '#131715'} emissiveIntensity={selected ? 0.25 : 0.08} />
+      <sphereGeometry args={[draggable ? 0.17 : 0.055, 16, 10]} />
+      <meshBasicMaterial color={accent} transparent opacity={draggable ? 0 : 1} depthWrite={!draggable} />
     </mesh>
-    <SceneLabel label={label} position={[0, 0, -0.28]} color={selected ? '#f8e8b1' : '#e6eadf'} />
+    {draggable && <mesh><sphereGeometry args={[selected ? 0.075 : 0.055, 16, 10]} /><meshBasicMaterial color={accent} /></mesh>}
+    <SceneLabel label={label} position={[0.14, 0, -0.19]} color={accent} fontSize={0.15} />
   </group>;
 }
