@@ -1,13 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Line, OrbitControls } from '@react-three/drei';
-import { MOUSE, Plane, Quaternion, Vector3 } from 'three';
-import { compareRotationOrder } from '../math/rotation';
+import { MOUSE, Plane, Vector3 } from 'three';
 import { forwardKinematics } from '../math/kinematics';
-import { makePose } from '../math/transform';
 import { useLabStore, worldPoseFor } from '../stores/labStore';
 import { CoordinateFrame, SceneLabel } from './CoordinateFrame';
 import { Robot } from './Robot';
+import { RotationScene } from './RotationScene';
 
 function PointMarker({ point, onMove, label = 'Point P', color = '#b9ee72' }: { point: Vector3; onMove: (point: Vector3) => void; label?: string; color?: string }) {
   const drag = useRef<{ pointerId: number; plane: Plane; startHit: Vector3; start: Vector3 } | null>(null);
@@ -64,34 +63,6 @@ function FrameScene() {
     />)}
     <Line points={[sourceWorld.position.toArray(), pointWorld.toArray()]} color="#b9ee72" lineWidth={2.5} />
     <PointMarker point={pointWorld} onMove={setPointWorld} />
-  </>;
-}
-
-function RotationComparisonFrame({ position, orientation, label }: { position: [number, number, number]; orientation: Quaternion; label: string }) {
-  const origin = new Vector3(...position);
-  const vectorTip = origin.clone().add(new Vector3(0.62, 0.28, 0.2).applyQuaternion(orientation));
-  return <>
-    {([['#ff655c', 1, 0, 0], ['#69dd82', 0, 1, 0], ['#6b9cff', 0, 0, 1]] as const).map(([color, x, y, z]) =>
-      <Line key={color} points={[origin.toArray(), origin.clone().add(new Vector3(x, y, z).multiplyScalar(0.8)).toArray()]} color={color} lineWidth={1.5} transparent opacity={0.3} />)}
-    <CoordinateFrame pose={makePose(origin, orientation)} label={label} accent="#e8d08a" length={0.85} selected />
-    <Line points={[origin.toArray(), vectorTip.toArray()]} color="#d9b75f" lineWidth={2.5} />
-    <mesh position={vectorTip.toArray()}><sphereGeometry args={[0.035, 10, 8]} /><meshBasicMaterial color="#d9b75f" /></mesh>
-  </>;
-}
-
-function RotationScene() {
-  const { rotationX, rotationY, rotationZ, rotationPair, rotationSense } = useLabStore();
-  const { firstAxis, secondAxis, forward, reverse } = compareRotationOrder({ X: rotationX, Y: rotationY, Z: rotationZ }, rotationPair);
-  const vector = new Vector3(1, 0.35, 0.4);
-  const worldVector = rotationSense === 'active' ? vector.clone().applyQuaternion(forward) : vector;
-  return <>
-    <RotationComparisonFrame position={[-1.75, 0.55, 0.25]} orientation={forward} label={`R${firstAxis.toLowerCase()}R${secondAxis.toLowerCase()}`} />
-    <RotationComparisonFrame position={[1.75, 0.55, 0.25]} orientation={reverse} label={`R${secondAxis.toLowerCase()}R${firstAxis.toLowerCase()}`} />
-    <CoordinateFrame pose={makePose(new Vector3(), new Quaternion())} label="World" length={0.65} subtle />
-    <Line points={[[0, -1.25, 0], worldVector.clone().add(new Vector3(0, -1.25, 0)).toArray()]} color="#b9ee72" lineWidth={4} />
-    <mesh position={worldVector.clone().add(new Vector3(0, -1.25, 0)).toArray()}><sphereGeometry args={[0.045, 16, 12]} /><meshBasicMaterial color="#b9ee72" /></mesh>
-    <SceneLabel label={rotationSense === 'active' ? 'Active vector' : 'Passive frame'} position={[0, -1.25, 0.7]} color="#d4f6a9" />
-    {rotationSense === 'passive' && <CoordinateFrame pose={makePose(new Vector3(0, -1.25, 0), forward)} label="观察坐标系" length={0.55} />}
   </>;
 }
 

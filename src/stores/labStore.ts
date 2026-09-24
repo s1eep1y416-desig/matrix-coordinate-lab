@@ -85,6 +85,8 @@ interface LabState {
   rotationZ: number;
   rotationPair: RotationPair;
   rotationSense: 'active' | 'passive';
+  rotationProgress: number;
+  rotationPlaying: boolean;
   fkStep: number;
   ikTarget: Vector3;
   ikDamping: number;
@@ -113,6 +115,10 @@ interface LabState {
   setRotationDemo: (axis: Axis, value: number) => void;
   setRotationPair: (pair: RotationPair) => void;
   setRotationSense: (sense: 'active' | 'passive') => void;
+  setRotationProgress: (progress: number) => void;
+  playRotation: () => void;
+  pauseRotation: () => void;
+  advanceRotation: (seconds: number) => void;
   setFkStep: (step: number) => void;
   setIkTarget: (target: Vector3) => void;
   setIkTargetCoordinate: (axis: 0 | 1 | 2, value: number) => number;
@@ -129,13 +135,14 @@ export const useLabStore = create<LabState>((set, get) => ({
   selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose',
   pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45],
   rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', fkStep: 3,
+  rotationProgress: 2, rotationPlaying: false,
   ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5,
   cameraResetKey: 0,
   setMode: (mode) => {
     if (mode === 'chain' && !get().frames.some((frame) => frame.id === 'B')) {
       const B: FrameNode = { id: 'B', name: 'Frame B', parentId: 'A', pose: makePose(new Vector3(1.25, 0.15, 0.55), quaternionFromEuler([20, -10, 18], get().eulerOrder)), constraints: frameConstraints(), visible: true };
-      set((state) => ({ frames: [...state.frames, B], nextFrameNumber: Math.max(state.nextFrameNumber, 3), mode, selectedFrameId: 'B', sourceId: 'B', targetId: 'world' }));
-    } else set({ mode });
+      set((state) => ({ frames: [...state.frames, B], nextFrameNumber: Math.max(state.nextFrameNumber, 3), mode, selectedFrameId: 'B', sourceId: 'B', targetId: 'world', rotationPlaying: false }));
+    } else set({ mode, rotationPlaying: false });
   },
   selectFrame: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { selectedFrameId: id, sourceId: id, targetId: state.targetId === id ? 'world' : state.targetId } : {}),
   setSource: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { sourceId: id, selectedFrameId: id } : {}),
@@ -242,10 +249,22 @@ export const useLabStore = create<LabState>((set, get) => ({
   }),
   setRotationDemo: (axis, value) => {
     if (!Number.isFinite(value)) return;
-    set({ [axis === 'X' ? 'rotationX' : axis === 'Y' ? 'rotationY' : 'rotationZ']: clamp(value, -180, 180) });
+    set({ [axis === 'X' ? 'rotationX' : axis === 'Y' ? 'rotationY' : 'rotationZ']: clamp(value, -180, 180), rotationPlaying: false });
   },
-  setRotationPair: (rotationPair) => set({ rotationPair }),
+  setRotationPair: (rotationPair) => set({ rotationPair, rotationProgress: 2, rotationPlaying: false }),
   setRotationSense: (rotationSense) => set({ rotationSense }),
+  setRotationProgress: (progress) => {
+    if (Number.isFinite(progress)) set({ rotationProgress: clamp(progress, 0, 2), rotationPlaying: false });
+  },
+  playRotation: () => set((state) => state.mode === 'rotation' ? {
+    rotationPlaying: true, rotationProgress: state.rotationProgress >= 2 ? 0 : state.rotationProgress,
+  } : {}),
+  pauseRotation: () => set({ rotationPlaying: false }),
+  advanceRotation: (seconds) => set((state) => {
+    if (!state.rotationPlaying || state.mode !== 'rotation' || !Number.isFinite(seconds) || seconds <= 0) return {};
+    const rotationProgress = Math.min(2, state.rotationProgress + seconds / 2);
+    return { rotationProgress, rotationPlaying: rotationProgress < 2 };
+  }),
   setFkStep: (fkStep) => set({ fkStep: clamp(Math.round(fkStep), 0, 3) }),
   setIkTarget: (ikTarget) => set({ ikTarget: ikTarget.clone(), ikIterations: 0 }),
   setIkTargetCoordinate: (axis, value) => {
@@ -262,5 +281,5 @@ export const useLabStore = create<LabState>((set, get) => ({
   }),
   setPinStep: (pinStep) => set({ pinStep: clamp(Math.round(pinStep), 0, 5) }),
   resetCamera: () => set((state) => ({ cameraResetKey: state.cameraResetKey + 1 })),
-  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
+  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', rotationProgress: 2, rotationPlaying: false, fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
 }));

@@ -2,6 +2,7 @@ import { Matrix3, Matrix4, MathUtils, Quaternion, Vector3 } from 'three';
 
 export type Axis = 'X' | 'Y' | 'Z';
 export type RotationPair = 'XY' | 'YZ' | 'ZX';
+export const ROTATION_DEMO_VECTOR = [1, 0.35, 0.4] as const;
 const AXES: Record<Axis, Vector3> = { X: new Vector3(1, 0, 0), Y: new Vector3(0, 1, 0), Z: new Vector3(0, 0, 1) };
 
 export function rotationAbout(axis: Axis, degrees: number): Quaternion {
@@ -13,20 +14,32 @@ export function rotationProduct(left: Quaternion, right: Quaternion): Quaternion
   return left.clone().multiply(right).normalize();
 }
 
-/** Both products use column vectors: the rightmost rotation acts first. */
-export function compareRotationOrder(angles: Record<Axis, number>, pair: RotationPair) {
+/** Progress 0 → 1 applies the right factor; 1 → 2 applies the left factor about a fixed world axis. */
+export function compareRotationOrder(angles: Record<Axis, number>, pair: RotationPair, progress = 2) {
   const [firstAxis, secondAxis] = pair.split('') as [Axis, Axis];
   const first = rotationAbout(firstAxis, angles[firstAxis]);
   const second = rotationAbout(secondAxis, angles[secondAxis]);
+  const boundedProgress = MathUtils.clamp(Number.isFinite(progress) ? progress : 0, 0, 2);
+  const stageOneProgress = Math.min(boundedProgress, 1);
+  const stageTwoProgress = Math.max(boundedProgress - 1, 0);
   return {
-    firstAxis, secondAxis, first, second,
-    forward: rotationProduct(first, second),
-    reverse: rotationProduct(second, first),
+    firstAxis, secondAxis, first, second, stageOneProgress, stageTwoProgress,
+    forward: rotationProduct(rotationAbout(firstAxis, angles[firstAxis] * stageTwoProgress), rotationAbout(secondAxis, angles[secondAxis] * stageOneProgress)),
+    reverse: rotationProduct(rotationAbout(secondAxis, angles[secondAxis] * stageTwoProgress), rotationAbout(firstAxis, angles[firstAxis] * stageOneProgress)),
   };
 }
 
 export function rotationMatrix(quaternion: Quaternion): Matrix4 {
   return new Matrix4().makeRotationFromQuaternion(quaternion.clone().normalize());
+}
+
+/** Passive rotation changes the reference coordinates while retaining the same world vector. */
+export function evaluateRotationVector(rotation: Quaternion, vector: Vector3, sense: 'active' | 'passive') {
+  if (sense === 'active') {
+    const worldVector = vector.clone().applyQuaternion(rotation);
+    return { worldVector, coordinates: worldVector.clone() };
+  }
+  return { worldVector: vector.clone(), coordinates: vector.clone().applyQuaternion(rotation.clone().invert()) };
 }
 
 export function validateRotationMatrix(matrix: Matrix4, tolerance = 1e-8): { orthogonalityError: number; determinant: number; valid: boolean } {

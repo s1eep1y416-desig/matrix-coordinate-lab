@@ -6,6 +6,56 @@ import { relativeFramePose, useLabStore, worldPoseFor } from './labStore';
 
 beforeEach(() => useLabStore.getState().reset());
 
+describe('rotation playback state', () => {
+  it('restarts, advances, pauses, resumes and stops exactly at the final pose', () => {
+    const store = useLabStore.getState();
+    store.setMode('rotation');
+    store.playRotation();
+    expect(useLabStore.getState().rotationProgress).toBe(0);
+    store.advanceRotation(2);
+    expect(useLabStore.getState().rotationProgress).toBe(1);
+    store.pauseRotation();
+    store.advanceRotation(2);
+    expect(useLabStore.getState().rotationProgress).toBe(1);
+    store.playRotation();
+    store.advanceRotation(10);
+    expect(useLabStore.getState()).toMatchObject({ rotationProgress: 2, rotationPlaying: false });
+  });
+
+  it('pauses on scrubbing, angle changes and mode changes', () => {
+    const store = useLabStore.getState();
+    store.setMode('rotation');
+    store.playRotation();
+    store.setRotationProgress(0.75);
+    expect(useLabStore.getState()).toMatchObject({ rotationProgress: 0.75, rotationPlaying: false });
+    store.playRotation();
+    store.setRotationDemo('X', -90);
+    expect(useLabStore.getState()).toMatchObject({ rotationX: -90, rotationPlaying: false });
+    store.playRotation();
+    store.setMode('chain');
+    store.advanceRotation(2);
+    expect(useLabStore.getState()).toMatchObject({ rotationProgress: 0.75, rotationPlaying: false });
+    store.playRotation();
+    expect(useLabStore.getState().rotationPlaying).toBe(false);
+  });
+
+  it('clamps progress and ignores invalid time deltas', () => {
+    const store = useLabStore.getState();
+    store.setRotationProgress(-2);
+    expect(useLabStore.getState().rotationProgress).toBe(0);
+    store.setRotationProgress(4);
+    expect(useLabStore.getState().rotationProgress).toBe(2);
+    store.setMode('rotation');
+    store.playRotation();
+    [NaN, Infinity, -1].forEach(store.advanceRotation);
+    expect(useLabStore.getState().rotationProgress).toBe(0);
+    store.setRotationProgress(NaN);
+    expect(useLabStore.getState().rotationProgress).toBe(0);
+    store.setRotationPair('YZ');
+    expect(useLabStore.getState()).toMatchObject({ rotationProgress: 2, rotationPlaying: false });
+  });
+});
+
 describe('frame limits and hierarchy', () => {
   it('clamps both precise input and 3D dragging to the same position limit', () => {
     const store = useLabStore.getState();

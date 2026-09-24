@@ -4,11 +4,12 @@ import { EULER_ORDERS, eulerFromQuaternion, isNearGimbalLock, type EulerOrder } 
 import { forwardKinematics } from './math/kinematics';
 import { jacobianManipulability, positionJacobian } from './math/inverseKinematics';
 import { axisAngleFromQuaternion } from './math/quaternion';
-import { compareRotationOrder, rotationAbout, rotationMatrix, validateRotation, type Axis, type RotationPair } from './math/rotation';
+import { compareRotationOrder, evaluateRotationVector, ROTATION_DEMO_VECTOR, rotationAbout, rotationMatrix, validateRotation, type Axis, type RotationPair } from './math/rotation';
 import { inversePose, inverseTransformPoint, matrixMaxError, poseMatrix, transformPoint, validateHomogeneous } from './math/transform';
 import { Formula, MatrixView, VectorReadout } from './components/MathView';
 import { NumberField, formatValue } from './components/NumberField';
 import { Scene } from './components/Scene';
+import { RotationPlayback } from './components/RotationPlayback';
 import { useLabStore, worldPoseFor, relativeFramePose, type DofKey, type FrameNode, type LabMode } from './stores/labStore';
 import 'katex/dist/katex.min.css';
 import './styles.css';
@@ -169,17 +170,19 @@ function RotationControls() {
   const angles: Record<Axis, number> = { X: rotationX, Y: rotationY, Z: rotationZ };
   const control = (axis: Axis) => <div className="slider-row" key={axis}>
     <strong>R{axis}</strong><input aria-label={`R${axis} 角度`} type="range" min="-180" max="180" step="1" value={angles[axis]} onChange={(event) => setRotationDemo(axis, Number(event.target.value))} />
-    <NumberField label={axis} unit="°" value={angles[axis]} onCommit={(number) => { setRotationDemo(axis, number); return Math.max(-180, Math.min(180, number)); }} />
+    <NumberField label={axis} unit="°" value={angles[axis]} scrub step={0.5} onCommit={(number) => { setRotationDemo(axis, number); return Math.max(-180, Math.min(180, number)); }} />
   </div>;
   const [firstAxis, secondAxis] = rotationPair;
   return <>
     <section className="control-card"><PaneTitle eyebrow="SINGLE-AXIS ROTATION" title="绕 X / Y / Z 旋转" />{(['X', 'Y', 'Z'] as const).map(control)}
-      <p className="fine-print">三个角度独立调节；下方始终显示 <Formula tex="R_x,\;R_y,\;R_z" /> 的实时矩阵。</p>
+      <p className="fine-print">三个目标角度独立调节；展开「单轴矩阵」可查看 <Formula tex="R_x,\;R_y,\;R_z" />。播放时，A / B 矩阵显示当前进度的旋转。</p>
+      <p className="fine-print">右手系 +90°：Rx 将 +Y 转向 +Z，Ry 将 +Z 转向 +X，Rz 将 +X 转向 +Y。−90° 的方向相反。</p>
     </section>
     <section className="control-card"><PaneTitle eyebrow="ORDER MATTERS" title="选两个轴比较次序" />
       <div className="rotation-pair-buttons">{(['XY', 'YZ', 'ZX'] as RotationPair[]).map((pair) => <button key={pair} className={rotationPair === pair ? 'active' : ''} onClick={() => setRotationPair(pair)} aria-pressed={rotationPair === pair}>{pair[0]} / {pair[1]}</button>)}</div>
       <p className="fine-print">当前比较 <Formula tex={`R_${firstAxis.toLowerCase()}R_${secondAxis.toLowerCase()}`} /> 与 <Formula tex={`R_${secondAxis.toLowerCase()}R_${firstAxis.toLowerCase()}`} />。采用列向量：右侧矩阵先作用；场景两侧的彩色坐标轴与下方矩阵完全对应。</p>
     </section>
+    <RotationPlayback />
     <section className="control-card"><PaneTitle eyebrow="ACTIVE / PASSIVE" title="旋转物体，还是改变描述？" />
       <div className="segmented"><button className={rotationSense === 'active' ? 'active' : ''} onClick={() => setRotationSense('active')}>Active · 物体转</button><button className={rotationSense === 'passive' ? 'active' : ''} onClick={() => setRotationSense('passive')}>Passive · 坐标系转</button></div>
       <p className="fine-print">{rotationSense === 'active' ? '参考系固定，世界向量随旋转改变。' : '空间向量固定，变的是观察它的参考坐标系；向量的世界位置不变。'}</p>
@@ -204,6 +207,7 @@ function FKControls() {
         <input aria-label={`关节 ${index + 1} 角度`} type="range" min="-180" max="180" step="1" value={angle} onChange={(event) => setRobotAngle(index as 0 | 1 | 2, Number(event.target.value))} />
         <NumberField label="角度" unit="°" value={angle} onCommit={(number) => { setRobotAngle(index as 0 | 1 | 2, number); return Math.max(-180, Math.min(180, number)); }} /></div>)}
       <p className="fine-print">J1 绕 Z，J2 与 J3 绕各自局部 Y。每段 link 沿自身 +X 伸出，长度依次为 1.25、1.00、0.80 m。</p>
+      <p className="fine-print">正角遵循右手定则：零位时，J1 正转朝 +Y；J2、J3 正转把其下游 +X 方向转向 −Z。</p>
     </section>
     <section className="control-card"><PaneTitle eyebrow="CHAIN REPLAY" title="逐级查看矩阵链" />
       <div className="step-buttons">{['base', 'J1', 'J2', 'tool'].map((label, index) => <button key={label} className={fkStep === index ? 'active' : ''} onClick={() => setFkStep(index)}>{label}</button>)}</div>
@@ -359,23 +363,26 @@ function FrameResults() {
 }
 
 function RotationResults() {
-  const { rotationX, rotationY, rotationZ, rotationPair, rotationSense } = useLabStore();
+  const { rotationX, rotationY, rotationZ, rotationPair, rotationSense, rotationProgress } = useLabStore();
   const angles: Record<Axis, number> = { X: rotationX, Y: rotationY, Z: rotationZ };
-  const { firstAxis, secondAxis, forward, reverse } = compareRotationOrder(angles, rotationPair);
-  const baseVector = new Vector3(1, 0.35, 0.4);
-  const activeVector = baseVector.clone().applyQuaternion(forward);
-  const passiveVector = baseVector.clone().applyQuaternion(forward.clone().invert());
+  const { firstAxis, secondAxis, forward, reverse, stageOneProgress, stageTwoProgress } = compareRotationOrder(angles, rotationPair, rotationProgress);
+  const baseVector = new Vector3(...ROTATION_DEMO_VECTOR);
+  const vectorA = evaluateRotationVector(forward, baseVector, rotationSense);
+  const vectorB = evaluateRotationVector(reverse, baseVector, rotationSense);
   const checkForward = validateRotation(forward), checkReverse = validateRotation(reverse);
-  const formulaForward = `R_${firstAxis.toLowerCase()}R_${secondAxis.toLowerCase()}`;
-  const formulaReverse = `R_${secondAxis.toLowerCase()}R_${firstAxis.toLowerCase()}`;
+  const factor = (axis: Axis, fraction: number) => `R_${axis.toLowerCase()}(${(angles[axis] * fraction).toFixed(1)}^\\circ)`;
+  const formulaForward = `R_A(t)=${factor(firstAxis, stageTwoProgress)}${factor(secondAxis, stageOneProgress)}`;
+  const formulaReverse = `R_B(t)=${factor(secondAxis, stageTwoProgress)}${factor(firstAxis, stageOneProgress)}`;
   const difference = forward.angleTo(reverse) * 180 / Math.PI;
   return <div className="results-stack">
-    <div className="result-intro"><span className="eyebrow">ROTATION MATRIX</span><h2>单轴旋转 → 矩阵连乘 → 空间姿态</h2><p>场景左、右分别对应下面两种乘法次序；淡色轴是固定世界方向，亮色轴与金色向量是旋转结果。</p></div>
-    <div className="matrix-layout rotation-matrices single-axis">{(['X', 'Y', 'Z'] as const).map((axis) => <MatrixView key={axis} matrix={rotationMatrix(rotationAbout(axis, angles[axis]))} size={3} label={`R_${axis.toLowerCase()}(\\theta_${axis.toLowerCase()})`} compact />)}</div>
-    <div className="equation-strip"><Formula tex={`${formulaForward} \\overset{?}{=} ${formulaReverse}`} /><span>通常不相等；右边先作用于列向量</span></div>
-    <div className="matrix-layout rotation-matrices"><MatrixView matrix={rotationMatrix(forward)} size={3} label={formulaForward} /><MatrixView matrix={rotationMatrix(reverse)} size={3} label={formulaReverse} /></div>
+    <div className="result-intro"><span className="eyebrow">ROTATION MATRIX · {Math.round(rotationProgress * 50)}%</span><h2>同样两个角度，不同的执行顺序</h2><p>A 先绕 {secondAxis} 再绕 {firstAxis}；B 先绕 {firstAxis} 再绕 {secondAxis}。淡色轴是固定世界方向。{rotationSense === 'active' ? '亮色轴表示物体朝向，金色向量随物体一起旋转。' : '亮色轴表示观察坐标系，金色向量保持世界方向不变。'}两组原点错开放置以便对比，不参与旋转计算。</p></div>
+    <div className="matrix-layout rotation-matrices current-rotation-matrices"><MatrixView matrix={rotationMatrix(forward)} size={3} label={formulaForward} /><MatrixView matrix={rotationMatrix(reverse)} size={3} label={formulaReverse} /></div>
     <div className="validation-line"><span className={checkForward.valid && checkReverse.valid ? 'good' : 'warn'}>● {checkForward.valid && checkReverse.valid ? '两个矩阵均为合法旋转' : '旋转矩阵有误'}</span><span>RᵀR−I 最大误差 {formatValue(Math.max(checkForward.orthogonalityError, checkReverse.orthogonalityError))}</span><span>det(R) = {formatValue(checkForward.determinant)}</span><span>{difference < 1e-6 ? '当前角度下两者重合' : `两种姿态相差 ${formatValue(difference)}°`}</span></div>
-    <div className="equation-strip"><Formula tex={rotationSense === 'active' ? "v_W'=Rv_W" : "v_A=R^{-1}v_W"} /><span>{rotationSense === 'active' ? `物体转：${vectorText(activeVector)}` : `参考系转：世界向量 ${vectorText(baseVector)} 不动，在新坐标系读作 ${vectorText(passiveVector)}`}</span></div>
+    <div className="readout-grid"><VectorReadout label={rotationSense === 'active' ? 'A · 旋转后的世界向量' : 'A · 固定向量在旋转参考系中的坐标'} values={vectorA.coordinates.toArray()} /><VectorReadout label={rotationSense === 'active' ? 'B · 旋转后的世界向量' : 'B · 固定向量在旋转参考系中的坐标'} values={vectorB.coordinates.toArray()} /></div>
+    <div className="equation-strip"><Formula tex={rotationSense === 'active' ? "v'_W=R(t)v_W" : "v_{local}=R(t)^T v_W"} /><span>初始世界向量 {vectorText(baseVector)} · {rotationSense === 'active' ? '向量转动，使用 R' : '参考系转动，使用 Rᵀ = R⁻¹'}</span></div>
+    <details className="advanced-results"><summary>查看目标角度的单轴矩阵 <span>Rx / Ry / Rz</span></summary>
+      <div className="matrix-layout rotation-matrices single-axis">{(['X', 'Y', 'Z'] as const).map((axis) => <MatrixView key={axis} matrix={rotationMatrix(rotationAbout(axis, angles[axis]))} size={3} label={factor(axis, 1)} compact />)}</div>
+    </details>
   </div>;
 }
 
