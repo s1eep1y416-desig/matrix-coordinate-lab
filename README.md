@@ -2,7 +2,7 @@
 
 通过拖动坐标系、改变旋转角和关节角，把矩阵计算与三维空间运动对应起来。面向正在学习 ROS2、TF、URDF 和机械臂控制的人，不是单纯的公式计算器。
 
-[在线实验室（需访问权限）](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/) · [reBot URDF 交接清单](docs/URDF_INPUT.md)
+[在线实验室（需访问权限）](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/)
 
 ## 当前可以做什么
 
@@ -103,7 +103,7 @@ Euler 表示不唯一，在 ±180° 边界或万向节锁附近，读数可能�
 
 ### 教学机械臂与 IK
 
-当前骨架为 Z-Y-Y 旋转关节，连杆沿各自局部 +X 伸出，长度依次为 `1.25 / 1.00 / 0.80 m`。每段变换为先旋转再沿旋转后的 +X 平移。用于说明递推计算，并非真实 reBot 的 URDF 坐标系定义。
+当前骨架为 Z-Y-Y 旋转关节，连杆沿各自局部 +X 伸出，长度依次为 `1.25 / 1.00 / 0.80 m`。每段变换为先旋转再沿旋转后的 +X 平移，用于说明通用的递推计算。
 
 ```text
 T_base_tool = T_base_link1 · T_link1_link2 · T_link2_link3
@@ -161,14 +161,8 @@ docs/URDF_INPUT.md              # 后续真实模型所需资料
 - 当前 **没有真实 URDF 导入、Mesh 加载或 Pinocchio Python/WASM 运行时**。Pinocchio 页是计算流程教学，计算来自本项目 TypeScript 模型。
 - IK 仅求解三维位置，不求完整六维末端位姿；是局部迭代方法，受初值、奇异性、限位与不可达目标影响，不保证收敛。最大臂展球壳只是外边界，壳内不代表必然可达。
 - 坐标系旋转限位限制当前 Euler 表示的分量，不等同于 URDF 的独立单轴关节限位；Euler 奇异与等价分支仍需注意。
-- 当前 Gimbal Lock 是数值提示，尚未实现独立的轴线重合教学动画。SLERP 对比、真实六轴 FK / 位姿 IK、夹爪及 tool/world 运动对比仍待扩展。
+- 当前 Gimbal Lock 是数值提示，尚未实现独立的轴线重合教学动画；SLERP 对比与 tool/world 运动对比也尚未实现。
 - 尚未做碰撞检测、动力学或真实机械臂控制。不要将教学数值直接用于硬件执行。
-
-## 后续接入 reBot
-
-先提供实际 `base_link`、六个运动 Link、`tool0`、`joint1–joint6`，以及安装位姿、关节轴、限位、Mesh 和一组已知姿态。夹爪按真实结构补充 Link / Joint / mimic。完整说明见 [URDF 交接清单](docs/URDF_INPUT.md)。
-
-收到模型后再按实际拓扑建立运动学链，对照已知末端位姿检查轴向、正负号和单位，然后扩展六轴 FK、位姿 IK 与 Pinocchio 结果对照。
 
 ## 发布与隐私
 

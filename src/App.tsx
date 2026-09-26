@@ -241,7 +241,7 @@ function FKControls() {
     </section>
     <section className="control-card"><PaneTitle eyebrow="CHAIN REPLAY" title={l('逐级查看矩阵链', 'Step through matrix chain')} />
       <div className="step-buttons">{['base', 'J1', 'J2', 'tool'].map((label, index) => <button key={label} className={fkStep === index ? 'active' : ''} onClick={() => setFkStep(index)}>{label}</button>)}</div>
-      <p className="fine-print">{l('选择一步，场景只显示计算到该级的运动学骨架和坐标系；真实外形将在导入你的 URDF 后替换。', 'Select a step to show the kinematic skeleton and frames computed up to that point. Your URDF will replace this teaching geometry later.')}</p>
+      <p className="fine-print">{l('选择一步，场景只显示计算到该级的运动学骨架和坐标系，用于观察每一级位姿如何累积。', 'Select a step to show the kinematic skeleton and frames computed up to that point, so you can inspect how each pose accumulates.')}</p>
     </section>
   </>;
 }
@@ -289,7 +289,7 @@ function PinocchioControls() {
     <section className="control-card"><PaneTitle eyebrow="q · degrees in UI" title={l('输入关节配置', 'Input joint configuration')} />
       <div className="three-fields">{robotAngles.map((angle, index) => <NumberField key={index} label={`q${index + 1}`} unit="°" scrub step={.5} value={angle} onCommit={(value) => { setRobotAngle(index as 0 | 1 | 2, value); return Math.max(-180, Math.min(180, value)); }} />)}</div>
       <button className="wide-action" onClick={() => { setRobotAngle(0, 45); setRobotAngle(1, -30); setRobotAngle(2, 15); setPinStep(5); }}>{l('载入文档示例 45, −30, 15', 'Load example 45, −30, 15')}</button>
-      <p className="fine-print">{l('界面便于学习而使用度；传入 Pinocchio 前转换为弧度。文档的 6 轴示例还包含 q4–q6，本实验先展示相同的 3 轴核心链路。', 'The UI uses degrees for learning and converts them to radians before Pinocchio. The 6-axis example also has q4–q6; this lab first shows the same 3-axis core chain.')}</p>
+      <p className="fine-print">{l('界面便于学习而使用度；进入 Pinocchio 计算流程前统一转换为弧度。本实验使用 3 轴链路聚焦展示核心数据流。', 'The UI uses degrees for learning and converts them to radians before the Pinocchio workflow. This lab uses a 3-axis chain to focus on the core data flow.')}</p>
     </section>
   </>;
 }
@@ -315,7 +315,7 @@ function IKResults() {
     <div className="readout-grid"><VectorReadout label={l('目标位置 · m', 'Target position · m')} values={ikTarget.toArray()} /><VectorReadout label={l('当前末端 · m', 'Current end effector · m')} values={fk.T_base_tool.position.toArray()} /><VectorReadout label="Cartesian error · m" values={error.toArray()} /><VectorReadout label={l('当前关节角 · °', 'Current joint angles · °')} values={robotAngles} unit="°" /></div>
     <div className="validation-line"><span className={converged ? 'good' : 'warn'}>● {converged ? l('已收敛', 'Converged') : reachable ? l('等待迭代', 'Awaiting iteration') : l('目标超出最大臂展', 'Target exceeds maximum reach')}</span><span>‖e‖ = {formatValue(errorNorm)} m</span><span>|det(J)| = {formatValue(manipulability)}</span><span>{l('迭代', 'Iterations')} {ikIterations}</span></div>
     <div className="matrix-layout"><MatrixView matrix={matrixFromJacobian(jacobian)} size={3} label="J_v(q)" /><MatrixView matrix={poseMatrix(fk.T_base_tool)} label="{}^{base}T_{tool}(q)" /></div>
-    <div className="teaching-band"><strong>{l('为什么这里只有位置 IK？', 'Why position-only IK?')}</strong><span>{l('3 个关节只有 3 个自由度，可用 3×3 的位置 Jacobian 匹配 x/y/z；文档中的 6 轴 reBot 使用', 'Three joints provide only three degrees of freedom, so a 3×3 position Jacobian matches x/y/z. The documented 6-axis reBot uses')} <Formula tex="\log_6(T_{current}^{-1}T_{target})" /> {l('得到旋转 + 平移的 6D SE(3) 误差。', 'to obtain a 6D SE(3) rotation + translation error.')}</span></div>
+    <div className="teaching-band"><strong>{l('为什么这里只有位置 IK？', 'Why position-only IK?')}</strong><span>{l('3 个关节只有 3 个自由度，因此用 3×3 的位置 Jacobian 匹配 x/y/z。完整位姿 IK 需要更多自由度，并可通过', 'Three joints provide only three degrees of freedom, so a 3×3 position Jacobian matches x/y/z. Full-pose IK needs more degrees of freedom and can use')} <Formula tex="\log_6(T_{current}^{-1}T_{target})" /> {l('构造旋转 + 平移的 6D SE(3) 误差。', 'to construct a 6D SE(3) rotation + translation error.')}</span></div>
   </div>;
 }
 
@@ -333,7 +333,7 @@ function PinocchioResults() {
     <div className="matrix-layout"><MatrixView matrix={poseMatrix(fk.T_base_tool)} label="data.oMf[\mathrm{end\_link}]" /><MatrixView matrix={rotationMatrix(q)} size={3} label="R_{end\_link}" /></div>
     <div className="readout-grid"><VectorReadout label={l('q · rad (Pinocchio 输入)', 'q · rad (Pinocchio input)')} values={robotAngles.map((value) => value * Math.PI / 180)} /><VectorReadout label="translation · m" values={fk.T_base_tool.position.toArray()} /><VectorReadout label={`${eulerOrder} Euler · °`} values={euler} unit="°" /><VectorReadout label="Quaternion [x, y, z, w]" values={[q.x, q.y, q.z, q.w]} /></div>
     <div className="api-map"><div><code>pin.buildModelFromUrdf()</code><span>URDF → Model</span></div><div><code>pin.forwardKinematics()</code><span>q → Link placements</span></div><div><code>pin.updateFramePlacements()</code><span>Link → Frame placements</span></div><div><code>data.oMf[frame_id]</code><span>{l('读取世界到末端的 SE(3)', 'Read world-to-end SE(3)')}</span></div></div>
-    <div className="teaching-band"><strong>{l('与文档示例的关系', 'Relation to the documented example')}</strong><span>{l('本页在浏览器中复现同一套数学与数据流；真实 Python 工程由 Pinocchio 计算，MeshCat 负责显示。下一步接入 reBot URDF 后，可把当前 3-Link 模型替换为 6 轴模型，并让 IK 同时求位置与方向。', 'This page reproduces the same mathematics and data flow in the browser. In a real Python project, Pinocchio computes while MeshCat renders. After importing the reBot URDF, the current 3-Link model can be replaced by the 6-axis robot and IK can solve both position and orientation.')}</span></div>
+    <div className="teaching-band"><strong>{l('与实际工作流的关系', 'Relation to a real workflow')}</strong><span>{l('本页在浏览器中复现通用的数学与数据流；在 Python 工程中可由 Pinocchio 负责运动学计算，MeshCat 负责三维显示。', 'This page reproduces the general mathematics and data flow in the browser. In a Python project, Pinocchio can compute kinematics while MeshCat handles 3D visualization.')}</span></div>
   </div>;
 }
 
@@ -443,7 +443,7 @@ function FKResults() {
   const chainError = Math.max(...finalMatrix.elements.map((value, index) => Math.abs(value - chainMatrix.elements[index])));
   const fkValid = chainError < 1e-8 && validateRotation(q).valid && validateHomogeneous(finalMatrix);
   return <div className="results-stack">
-    <div className="result-intro"><span className="eyebrow">FORWARD KINEMATICS</span><h2>{l('关节角 → 末端位姿', 'Joint angles → end-effector pose')}</h2><p>{l('当前只显示教学用 3 关节运动学骨架；每个关节改变后，下游坐标轴与矩阵链实时重算。真实几何将在你提供 URDF 后替换。', 'This teaching view shows a 3-joint kinematic skeleton. Each joint change recomputes downstream axes and the matrix chain in real time. Your URDF will replace this geometry later.')}</p></div>
+    <div className="result-intro"><span className="eyebrow">FORWARD KINEMATICS</span><h2>{l('关节角 → 末端位姿', 'Joint angles → end-effector pose')}</h2><p>{l('当前显示教学用 3 关节运动学骨架；每个关节改变后，下游坐标轴与矩阵链实时重算。', 'This teaching view shows a 3-joint kinematic skeleton. Each joint change recomputes downstream axes and the matrix chain in real time.')}</p></div>
     <div className="equation-strip"><Formula tex="{}^{\mathrm{base}}T_{\mathrm{tool}} = {}^{\mathrm{base}}T_{\mathrm{link1}}\;{}^{\mathrm{link1}}T_{\mathrm{link2}}\;{}^{\mathrm{link2}}T_{\mathrm{tool}}" /><span>q1 → q2 → q3</span></div>
     <div className="matrix-layout"><MatrixView matrix={finalMatrix} label="{}^{\mathrm{base}}T_{\mathrm{tool}}" />
       <MatrixView matrix={rotationMatrix(fk.T_base_tool.quaternion)} size={3} label="{}^{\mathrm{base}}R_{\mathrm{tool}}" /></div>
