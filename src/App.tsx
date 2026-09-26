@@ -16,10 +16,10 @@ import 'katex/dist/katex.min.css';
 import './styles.css';
 
 const NAV: { id: LabMode; label: { zh: string; en: string }; short: string }[] = [
-  { id: 'frames', label: { zh: '坐标系与变换', en: 'Frames & Transforms' }, short: 'Frames + Transforms' },
-  { id: 'rotation', label: { zh: '旋转矩阵', en: 'Rotation Matrices' }, short: 'Rotation' },
+  { id: 'frames', label: { zh: '坐标系与变换', en: 'Frames' }, short: 'Frames + Transforms' },
+  { id: 'rotation', label: { zh: '旋转矩阵', en: 'Rotation' }, short: 'Rotation' },
   { id: 'fk', label: { zh: '3-Link 正运动学', en: '3-Link FK' }, short: 'Kinematics' },
-  { id: 'ik', label: { zh: '逆运动学', en: 'Inverse Kinematics' }, short: 'IK Solver' },
+  { id: 'ik', label: { zh: '逆运动学', en: 'IK' }, short: 'IK Solver' },
   { id: 'pinocchio', label: { zh: 'Pinocchio', en: 'Pinocchio' }, short: 'Workflow' },
 ];
 const navLabel = (mode: LabMode, language: Language) => NAV.find((item) => item.id === mode)?.label[language] ?? '';
@@ -466,7 +466,7 @@ export default function App() {
   return <div className="app-shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">⌖</span><span>{l('机器人学 · 坐标实验室', 'Robotics · Coordinate Lab')}</span><small>ROBOTICS LAB</small></div>
       <nav className="mode-nav" aria-label={l('学习模块', 'Learning modules')}>{NAV.map((item, index) => <button key={item.id} className={mode === item.id ? 'active' : ''} onClick={() => setMode(item.id)}><small>0{index + 1}</small>{item.label[language]}</button>)}</nav>
-      <div className="topbar-actions"><button className="language-button" onClick={toggleLanguage} aria-label={l('切换为英文', 'Switch to Chinese')} title={l('切换为英文', 'Switch to Chinese')}><span>{language === 'zh' ? '中' : 'EN'}</span>{language === 'zh' ? 'EN' : '中文'}</button><button className="reset-button" onClick={reset} title={l('重置全部场景', 'Reset all scenes')}>{l('重置', 'Reset')}</button></div></header>
+      <div className="topbar-actions"><button className="language-button" onClick={toggleLanguage} aria-label={l('切换为英文', 'Switch to Chinese')} title={l('切换为英文', 'Switch to Chinese')}>{language === 'zh' ? 'EN' : '中文'}</button><button className="reset-button" onClick={reset} title={l('重置全部场景', 'Reset all scenes')}>{l('重置', 'Reset')}</button></div></header>
     <main className="workspace">
       <section className="visual-workspace"><div className="scene-heading"><div><span className="eyebrow">INTERACTIVE 3D</span><h1>{navLabel(mode, language)}</h1></div><span className="heading-note">{mode === 'ik' ? l('拖动目标点，用 Jacobian 逐步逼近', 'Drag the target and iterate with the Jacobian') : mode === 'pinocchio' ? l('沿数据流查看 URDF、FK、SE(3) 与可视化', 'Follow the flow from URDF and FK to SE(3) and rendering') : mode === 'fk' ? l('拖动关节角，看连杆与矩阵一起运动', 'Adjust joints and watch links and matrices move together') : mode === 'rotation' ? l('调节 Rx、Ry、Rz，对比旋转次序与主动 / 被动视角', 'Adjust Rx, Ry, Rz and compare order plus active / passive views') : l('拖动坐标系与点，查看相对变换和父子矩阵链', 'Drag frames and points to inspect relative transforms and parent-child chains')}</span></div><Scene />
         {mode === 'rotation' ? <RotationResults /> : mode === 'fk' ? <FKResults /> : mode === 'ik' ? <IKResults /> : mode === 'pinocchio' ? <PinocchioResults /> : <FrameResults />}
