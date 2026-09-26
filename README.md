@@ -18,6 +18,7 @@
 | Pinocchio 流程 | 以相同的教学骨架解释 URDF → Model → q → FK → Frame placements；目前不是实际 Pinocchio 运行环境。 |
 
 页面沿用白绿操作区、黑金场景，坐标轴保持 X 红、Y 绿、Z 蓝。
+右上角提供“中文 / English”切换，导航、操作说明、验证结果与三维场景提示会同步切换，数学符号和当前实验状态保持不变。
 
 ## 本地运行
 
@@ -142,7 +143,8 @@ src/
 │   └── NumberField.tsx         # 精确输入与拖动数值
 ├── stores/
 │   ├── labStore.ts             # 位姿、层级、限制与交互状态
-│   └── labStore.test.ts
+│   ├── labStore.test.ts
+│   └── localeStore.ts          # 中英文界面状态与文案选择
 ├── App.tsx
 └── styles.css
 docs/URDF_INPUT.md              # 后续真实模型所需资料

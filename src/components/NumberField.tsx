@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { localize, useLocaleStore } from '../stores/localeStore';
 
 export function formatValue(value: number): string {
   if (!Number.isFinite(value)) return '—';
@@ -20,6 +21,7 @@ interface NumberFieldProps {
 }
 
 export function NumberField({ label, value, onCommit, disabled, min, max, step = 1, scrub = false, unit, id }: NumberFieldProps) {
+  const language = useLocaleStore((state) => state.language);
   const [draft, setDraft] = useState(formatValue(value));
   const inputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startValue: number; moved: boolean } | null>(null);
@@ -41,7 +43,7 @@ export function NumberField({ label, value, onCommit, disabled, min, max, step =
         id={id} ref={inputRef} type="text" inputMode="decimal" value={draft} disabled={disabled}
         aria-label={`${label}${unit ? ` (${unit})` : ''}`}
         data-min={min} data-max={max}
-        title={scrub ? '左右拖动调节；点击后可输入精确数值' : undefined}
+        title={scrub ? localize(language, '左右拖动调节；点击后可输入精确数值', 'Drag left or right to adjust; click to enter an exact value') : undefined}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={() => { if (!dragRef.current?.moved) commit(draft); }}
         onKeyDown={(event) => {

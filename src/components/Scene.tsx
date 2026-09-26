@@ -4,6 +4,7 @@ import { Line, OrbitControls } from '@react-three/drei';
 import { MOUSE, Plane, Vector3 } from 'three';
 import { forwardKinematics } from '../math/kinematics';
 import { framePathIds, useLabStore, worldPoseFor } from '../stores/labStore';
+import { localize, useLocaleStore } from '../stores/localeStore';
 import { CoordinateFrame, SceneLabel } from './CoordinateFrame';
 import { Robot } from './Robot';
 import { RotationScene } from './RotationScene';
@@ -106,6 +107,8 @@ function SceneCamera({ mode, resetKey }: { mode: 'frames' | 'rotation' | 'fk' | 
 }
 
 export function Scene() {
+  const language = useLocaleStore((state) => state.language);
+  const l = (zh: string, en: string) => localize(language, zh, en);
   const mode = useLabStore((state) => state.mode);
   const robotAngles = useLabStore((state) => state.robotAngles);
   const fkStep = useLabStore((state) => state.fkStep);
@@ -116,8 +119,8 @@ export function Scene() {
   const targetId = useLabStore((state) => state.targetId);
   const frames = useLabStore((state) => state.frames);
   const frameName = (id: string) => frames.find((frame) => frame.id === id)?.name ?? id;
-  return <div className="scene-shell" aria-label="三维机器人学场景">
-    <Canvas camera={{ position: [3.1, -4.2, 3.0], up: [0, 0, 1], fov: 42, near: 0.1, far: 100 }} dpr={[1, 2]} fallback={<div className="webgl-fallback">此浏览器无法启动 3D 场景，数值和矩阵仍可使用。</div>}>
+  return <div className="scene-shell" aria-label={l('三维机器人学场景', '3D robotics scene')}>
+    <Canvas camera={{ position: [3.1, -4.2, 3.0], up: [0, 0, 1], fov: 42, near: 0.1, far: 100 }} dpr={[1, 2]} fallback={<div className="webgl-fallback">{l('此浏览器无法启动 3D 场景，数值和矩阵仍可使用。', 'This browser cannot start the 3D scene. Numeric and matrix tools remain available.')}</div>}>
       <color attach="background" args={['#0b0c09']} />
       <WorldGrid />
       {mode === 'fk' ? <Robot angles={robotAngles} step={fkStep} /> : mode === 'ik' ? <IKScene /> : mode === 'pinocchio' ? <Robot angles={robotAngles} step={pinStep < 3 ? 0 : pinStep < 5 ? 2 : 3} /> : mode === 'rotation' ? <RotationScene /> : <FrameScene />}
@@ -125,10 +128,10 @@ export function Scene() {
       <SceneCamera mode={mode} resetKey={cameraResetKey} />
     </Canvas>
     {mode === 'frames' && <>
-      <div className="scene-axis-legend" aria-label="坐标轴颜色：X 红、Y 绿、Z 蓝"><span className="x">X</span><span className="y">Y</span><span className="z">Z</span></div>
-      <div className="scene-route"><span>源</span><strong>{frameName(sourceId)}</strong><b>→</b><span>目标</span><strong>{frameName(targetId)}</strong></div>
+      <div className="scene-axis-legend" aria-label={l('坐标轴颜色：X 红、Y 绿、Z 蓝', 'Axis colors: X red, Y green, Z blue')}><span className="x">X</span><span className="y">Y</span><span className="z">Z</span></div>
+      <div className="scene-route"><span>{l('源', 'Source')}</span><strong>{frameName(sourceId)}</strong><b>→</b><span>{l('目标', 'Target')}</span><strong>{frameName(targetId)}</strong></div>
     </>}
-    <button className="scene-reset-view" onClick={resetCamera}>重置视角</button>
-    <div className="scene-overlay"><span className="scene-live">● 实时同步</span><span>{mode === 'frames' ? '中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放' : mode === 'ik' ? '中键转视角 · 左键拖动 Target · 滚轮缩放' : '中键转视角 · 右侧调节参数 · 滚轮缩放'}</span></div>
+    <button className="scene-reset-view" onClick={resetCamera}>{l('重置视角', 'Reset view')}</button>
+    <div className="scene-overlay"><span className="scene-live">● {l('实时同步', 'Live sync')}</span><span>{mode === 'frames' ? l('中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放', 'Middle drag: orbit · Left drag: origin / axis tip / Point P · Wheel: zoom') : mode === 'ik' ? l('中键转视角 · 左键拖动 Target · 滚轮缩放', 'Middle drag: orbit · Left drag: Target · Wheel: zoom') : l('中键转视角 · 右侧调节参数 · 滚轮缩放', 'Middle drag: orbit · Adjust parameters on the right · Wheel: zoom')}</span></div>
   </div>;
 }
