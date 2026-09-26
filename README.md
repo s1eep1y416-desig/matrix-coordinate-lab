@@ -1,5 +1,7 @@
 # Matrix Coordinate Lab · 三维机器人学实验室
 
+[English](README_EN.md) · **简体中文**
+
 通过拖动坐标系、改变旋转角和关节角，把矩阵计算与三维空间运动对应起来。面向正在学习 ROS2、TF、URDF 和机械臂控制的人，不是单纯的公式计算器。
 
 [在线实验室（需访问权限）](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/)
@@ -147,7 +149,6 @@ src/
 │   └── localeStore.ts          # 中英文界面状态与文案选择
 ├── App.tsx
 └── styles.css
-docs/URDF_INPUT.md              # 后续真实模型所需资料
 ```
 
 ## 验证与当前边界

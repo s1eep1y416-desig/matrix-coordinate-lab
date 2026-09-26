@@ -42,6 +42,17 @@ function PaneTitle({ eyebrow, title, aside }: { eyebrow: string; title: string; 
   return <div className="pane-title"><div><span className="eyebrow">{eyebrow}</span><h2>{title}</h2></div>{aside}</div>;
 }
 
+function LabLogo() {
+  return <svg viewBox="0 0 44 44" role="img" aria-label="Coordinate frame and matrix logo">
+    <path className="logo-bracket" d="M8 7H5v30h3M36 7h3v30h-3" />
+    <g className="logo-matrix"><rect x="26" y="9" width="3.5" height="3.5" rx=".7" /><rect x="32" y="9" width="3.5" height="3.5" rx=".7" /><rect x="26" y="15" width="3.5" height="3.5" rx=".7" /><rect x="32" y="15" width="3.5" height="3.5" rx=".7" /></g>
+    <path className="logo-axis-x" d="M16 29h15m0 0-4-3m4 3-4 3" />
+    <path className="logo-axis-y" d="M16 29V14m0 0-3 4m3-4 3 4" />
+    <path className="logo-axis-z" d="m16 29-7 7m0 0 1-5m-1 5 5-1" />
+    <circle className="logo-origin" cx="16" cy="29" r="2.2" />
+  </svg>;
+}
+
 function FrameTree() {
   const language = useLocaleStore((state) => state.language);
   const l = (zh: string, en: string) => localize(language, zh, en);
@@ -464,7 +475,7 @@ export default function App() {
   const reset = useLabStore((state) => state.reset);
   useEffect(() => { document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'; }, [language]);
   return <div className="app-shell">
-    <header className="topbar"><div className="brand"><span className="brand-mark">⌖</span><span>{l('机器人学 · 坐标实验室', 'Robotics · Coordinate Lab')}</span><small>ROBOTICS LAB</small></div>
+    <header className="topbar"><div className="brand"><span className="brand-mark"><LabLogo /></span><span>{l('机器人学 · 坐标实验室', 'Robotics · Coordinate Lab')}</span><small>ROBOTICS LAB</small></div>
       <nav className="mode-nav" aria-label={l('学习模块', 'Learning modules')}>{NAV.map((item, index) => <button key={item.id} className={mode === item.id ? 'active' : ''} onClick={() => setMode(item.id)}><small>0{index + 1}</small>{item.label[language]}</button>)}</nav>
       <div className="topbar-actions"><button className="language-button" onClick={toggleLanguage} aria-label={l('切换为英文', 'Switch to Chinese')} title={l('切换为英文', 'Switch to Chinese')}>{language === 'zh' ? 'EN' : '中文'}</button><button className="reset-button" onClick={reset} title={l('重置全部场景', 'Reset all scenes')}>{l('重置', 'Reset')}</button></div></header>
     <main className="workspace">
