@@ -4,7 +4,7 @@
 
 通过拖动坐标系、改变旋转角和关节角，把矩阵计算与三维空间运动对应起来。面向正在学习 ROS2、TF、URDF 和机械臂控制的人，不是单纯的公式计算器。
 
-[在线实验室](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/) · [GitHub 源代码](https://github.com/s1eep1y416-desig/matrix-coordinate-lab)
+[在线实验室](https://s1eep1y416-desig.github.io/matrix-coordinate-lab/) · [GitHub 源代码](https://github.com/s1eep1y416-desig/matrix-coordinate-lab)
 
 ## 当前可以做什么
 

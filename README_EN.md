@@ -4,7 +4,7 @@
 
 Connect matrix calculations with spatial motion by dragging coordinate frames and changing rotation and joint angles. The lab is built for people learning ROS2, TF, URDF, and robot control—not as a formula-only calculator.
 
-[Open the lab](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/) · [GitHub source](https://github.com/s1eep1y416-desig/matrix-coordinate-lab)
+[Open the lab](https://s1eep1y416-desig.github.io/matrix-coordinate-lab/) · [GitHub source](https://github.com/s1eep1y416-desig/matrix-coordinate-lab)
 
 ## What you can do
 
