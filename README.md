@@ -4,7 +4,7 @@
 
 通过拖动坐标系、改变旋转角和关节角，把矩阵计算与三维空间运动对应起来。面向正在学习 ROS2、TF、URDF 和机械臂控制的人，不是单纯的公式计算器。
 
-[在线实验室（需访问权限）](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/)
+[在线实验室](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/) · [GitHub 源代码](https://github.com/s1eep1y416-desig/matrix-coordinate-lab)
 
 ## 当前可以做什么
 
@@ -26,9 +26,19 @@
 
 需要 Node.js **20.19+（20.x）或 22.12+**，推荐 22.12+，以及支持 WebGL 的浏览器。
 
+### 下载后直接启动
+
+1. 在 GitHub 点击 **Code → Download ZIP** 并解压，或使用 `git clone`。
+2. 安装 [Node.js 22](https://nodejs.org/)（只需安装一次）。
+3. macOS 双击 `start.command`；Windows 双击 `start.bat`；Linux 运行 `./start.sh`。
+
+启动文件会在首次运行时自动安装依赖，随后打开 `http://127.0.0.1:5173/`。终端窗口必须保持开启；关闭窗口后本地网站也会停止。macOS 若阻止首次打开，请右键 `start.command` 选择“打开”，或在终端运行 `chmod +x start.command && ./start.command`。
+
+### 使用终端启动
+
 ```bash
 npm ci
-npm run dev
+npm start
 ```
 
 打开终端显示的本地地址，默认是 `http://127.0.0.1:5173/`。
@@ -167,4 +177,4 @@ src/
 
 ## 发布与隐私
 
-本站使用 Sites 托管，项目配置在 `.openai/hosting.json`，静态构建输出为 `dist/`。网站访问权限与 GitHub 仓库可见性是两套独立设置；当前均按私有方式维护。发布时只使用正式构建产物，不包含临时截图、凭证或本地环境文件。
+本站使用 Sites 托管，项目配置在 `.openai/hosting.json`，静态构建输出为 `dist/`。网站访问权限与 GitHub 仓库可见性是两套独立设置；GitHub 仓库当前公开。下载源码后可以使用仓库根目录的一键启动文件在本机运行。发布时只使用正式构建产物，不包含临时截图、凭证或本地环境文件。

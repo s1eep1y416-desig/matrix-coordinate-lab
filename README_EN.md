@@ -4,7 +4,7 @@
 
 Connect matrix calculations with spatial motion by dragging coordinate frames and changing rotation and joint angles. The lab is built for people learning ROS2, TF, URDF, and robot control—not as a formula-only calculator.
 
-[Open the private lab](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/)
+[Open the lab](https://matrix-coordinate-lab.s1eep1y416.chatgpt.site/) · [GitHub source](https://github.com/s1eep1y416-desig/matrix-coordinate-lab)
 
 ## What you can do
 
@@ -25,9 +25,19 @@ The interface uses a white-and-green control area and a black-and-gold 3D scene.
 
 Requires Node.js **20.19+ (20.x) or 22.12+**, with 22.12+ recommended, and a WebGL-capable browser.
 
+### Download and launch
+
+1. Choose **Code → Download ZIP** on GitHub and extract it, or use `git clone`.
+2. Install [Node.js 22](https://nodejs.org/) once.
+3. Double-click `start.command` on macOS or `start.bat` on Windows. On Linux, run `./start.sh`.
+
+The launcher installs dependencies on the first run and opens `http://127.0.0.1:5173/`. Keep the terminal window open while using the lab. If macOS blocks the first launch, right-click `start.command` and choose Open, or run `chmod +x start.command && ./start.command` in Terminal.
+
+### Start from a terminal
+
 ```bash
 npm ci
-npm run dev
+npm start
 ```
 
 Open the local URL printed by the terminal, normally `http://127.0.0.1:5173/`.
@@ -166,4 +176,4 @@ Current limits:
 
 ## Publishing and privacy
 
-The site is hosted with Sites and configured through `.openai/hosting.json`; static output is built into `dist/`. Site access and GitHub repository visibility are separate settings, and both are maintained privately. Only production build artifacts are published; temporary screenshots, credentials, and local environment files are excluded.
+The site is hosted with Sites and configured through `.openai/hosting.json`; static output is built into `dist/`. Site access and GitHub repository visibility are separate settings, and the GitHub repository is currently public. After downloading the source, use one of the launchers in the repository root to run it locally. Only production build artifacts are published; temporary screenshots, credentials, and local environment files are excluded.
