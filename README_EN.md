@@ -23,9 +23,13 @@ The interface uses a white-and-green control area and a black-and-gold 3D scene.
 
 ## Run locally
 
-Requires Node.js **20.19+ (20.x) or 22.12+**, with 22.12+ recommended, and a WebGL-capable browser.
+### Easiest: open the offline edition
 
-### Download and launch
+Download and extract the repository ZIP, then double-click **`Matrix-Coordinate-Lab-offline.html`** in the repository root. It contains its JavaScript, styles, equation fonts, and icon, so it needs neither Node.js nor a network connection or local server. Use a current WebGL-capable version of Chrome, Edge, Safari, or Firefox.
+
+### Run the development edition
+
+Requires Node.js **20.19+ (20.x) or 22.12+**, with 22.12+ recommended.
 
 1. Choose **Code → Download ZIP** on GitHub and extract it, or use `git clone`.
 2. Install [Node.js 22](https://nodejs.org/) once.
@@ -45,6 +49,7 @@ Open the local URL printed by the terminal, normally `http://127.0.0.1:5173/`.
 ```bash
 npm test        # Math and state regression tests
 npm run build   # TypeScript check + dist/ build
+npm run build:offline  # Also regenerate the single-file offline edition
 ```
 
 Stack: React 19, TypeScript, Three.js, React Three Fiber, Drei, Zustand, KaTeX, Vite, and Vitest.

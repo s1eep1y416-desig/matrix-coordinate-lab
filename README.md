@@ -24,9 +24,13 @@
 
 ## 本地运行
 
-需要 Node.js **20.19+（20.x）或 22.12+**，推荐 22.12+，以及支持 WebGL 的浏览器。
+### 最简单：直接打开离线版
 
-### 下载后直接启动
+下载仓库 ZIP 并解压后，直接双击根目录中的 **`Matrix-Coordinate-Lab-offline.html`**。它已包含 JavaScript、样式、公式字体和图标，不需要安装 Node.js，也不需要联网或启动服务器。请使用支持 WebGL 的新版 Chrome、Edge、Safari 或 Firefox。
+
+### 运行开发版
+
+需要 Node.js **20.19+（20.x）或 22.12+**，推荐 22.12+。
 
 1. 在 GitHub 点击 **Code → Download ZIP** 并解压，或使用 `git clone`。
 2. 安装 [Node.js 22](https://nodejs.org/)（只需安装一次）。
@@ -46,6 +50,7 @@ npm start
 ```bash
 npm test         # 数学与状态回归测试
 npm run build   # TypeScript 检查 + 生成 dist/
+npm run build:offline  # 同时重新生成单文件离线版
 ```
 
 技术栈：React 19、TypeScript、Three.js、React Three Fiber、Drei、Zustand、KaTeX、Vite、Vitest。
