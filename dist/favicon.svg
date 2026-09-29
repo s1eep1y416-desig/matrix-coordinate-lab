@@ -1,14 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="15" fill="#11140e"/>
-  <path d="M12 9H8v46h4M52 9h4v46h-4" fill="none" stroke="#d9b75f" stroke-width="3" stroke-linecap="round"/>
-  <g fill="#d9b75f">
-    <rect x="39" y="13" width="5" height="5" rx="1"/><rect x="48" y="13" width="5" height="5" rx="1"/>
-    <rect x="39" y="22" width="5" height="5" rx="1"/><rect x="48" y="22" width="5" height="5" rx="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44">
+  <rect width="44" height="44" rx="10" fill="#11140e"/>
+  <defs>
+    <marker id="rotation-arrow" viewBox="0 0 6 6" refX="5.1" refY="3" markerWidth="3.8" markerHeight="3.8" orient="auto">
+      <path d="M0 0 6 3 0 6Z" fill="#d9b75f"/>
+    </marker>
+  </defs>
+  <path d="M8 7H5v30h3M36 7h3v30h-3" fill="none" stroke="#d9b75f" stroke-width="2" stroke-linecap="round"/>
+  <path d="M12 19.5A12.8 12.8 0 1 1 16.2 34.2" fill="none" stroke="#d9b75f" stroke-width="1.8" stroke-linecap="round" marker-end="url(#rotation-arrow)"/>
+  <g fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 27h12m0 0-3.6-2.7m3.6 2.7-3.6 2.7" stroke="#f06a5f"/>
+    <path d="M21 27V13m0 0-2.8 3.8M21 13l2.8 3.8" stroke="#78d28b"/>
+    <path d="m21 27-8.5 8.5m0 0 1.2-4.8m-1.2 4.8 4.8-1.2" stroke="#6e9ff2"/>
   </g>
-  <g fill="none" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M24 44h23m0 0-6-5m6 5-6 5" stroke="#f06a5f"/>
-    <path d="M24 44V21m0 0-5 6m5-6 5 6" stroke="#78d28b"/>
-    <path d="m24 44-11 11m0 0 2-7m-2 7 7-2" stroke="#6e9ff2"/>
-  </g>
-  <circle cx="24" cy="44" r="3.4" fill="#f2d579" stroke="#11140e" stroke-width="1.5"/>
+  <circle cx="21" cy="27" r="2.25" fill="#f2d579" stroke="#11140e" stroke-width="1"/>
 </svg>

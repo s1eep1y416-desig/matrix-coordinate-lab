@@ -43,13 +43,18 @@ function PaneTitle({ eyebrow, title, aside }: { eyebrow: string; title: string; 
 }
 
 function LabLogo() {
-  return <svg viewBox="0 0 44 44" role="img" aria-label="Coordinate frame and matrix logo">
+  return <svg viewBox="0 0 44 44" role="img" aria-label="Matrix, coordinate frame, and rotation logo">
+    <defs>
+      <marker id="lab-logo-rotation-arrow" viewBox="0 0 6 6" refX="5.1" refY="3" markerWidth="3.8" markerHeight="3.8" orient="auto">
+        <path className="logo-rotation-head" d="M0 0 6 3 0 6Z" />
+      </marker>
+    </defs>
     <path className="logo-bracket" d="M8 7H5v30h3M36 7h3v30h-3" />
-    <g className="logo-matrix"><rect x="26" y="9" width="3.5" height="3.5" rx=".7" /><rect x="32" y="9" width="3.5" height="3.5" rx=".7" /><rect x="26" y="15" width="3.5" height="3.5" rx=".7" /><rect x="32" y="15" width="3.5" height="3.5" rx=".7" /></g>
-    <path className="logo-axis-x" d="M16 29h15m0 0-4-3m4 3-4 3" />
-    <path className="logo-axis-y" d="M16 29V14m0 0-3 4m3-4 3 4" />
-    <path className="logo-axis-z" d="m16 29-7 7m0 0 1-5m-1 5 5-1" />
-    <circle className="logo-origin" cx="16" cy="29" r="2.2" />
+    <path className="logo-rotation" d="M12 19.5A12.8 12.8 0 1 1 16.2 34.2" markerEnd="url(#lab-logo-rotation-arrow)" />
+    <path className="logo-axis-x" d="M21 27h12m0 0-3.6-2.7m3.6 2.7-3.6 2.7" />
+    <path className="logo-axis-y" d="M21 27V13m0 0-2.8 3.8M21 13l2.8 3.8" />
+    <path className="logo-axis-z" d="m21 27-8.5 8.5m0 0 1.2-4.8m-1.2 4.8 4.8-1.2" />
+    <circle className="logo-origin" cx="21" cy="27" r="2.25" />
   </svg>;
 }
 
