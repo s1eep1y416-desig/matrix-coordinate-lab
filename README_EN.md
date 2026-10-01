@@ -16,10 +16,10 @@ Connect matrix calculations with spatial motion by dragging coordinate frames an
 | Active / passive rotation | Rotate the gold vector in active mode; keep the world vector fixed and inspect its rotating-frame coordinates in passive mode. |
 | Rotation representations | Six Euler orders, ZYX / RPY, quaternion, and Axis-Angle; preserve either pose or angle values when changing order; detect gimbal lock. |
 | 3-Link FK | Z-Y-Y teaching skeleton, end-effector position and orientation, and step-by-step matrix-chain playback. |
-| Position IK | Analytic position Jacobian, damped least squares, descent line search, single-step iteration, automatic solve, and a draggable target. |
+| Position IK and trajectories | Analytic position Jacobian, damped least squares, descent line search, single-step iteration, automatic solve, and a draggable target; quintic minimum-jerk joint trajectories, scrubbing, playback controls, and a glowing end-effector trail. |
 | Pinocchio workflow | Explain URDF → Model → q → FK → Frame placements with the same teaching skeleton. This is not a live Pinocchio runtime. |
 
-The interface uses a white-and-green control area and a black-and-gold 3D scene. Axes follow the standard colors: X red, Y green, Z blue. The top-right Chinese / English button switches navigation, controls, teaching text, validation results, and scene hints without changing mathematical notation or the current experiment state.
+The interface uses a white-and-green control area and a black-and-gold 3D scene. Axes follow the standard colors: X red, Y green, Z blue. Middle-button dragging orbits the 3D view, and the scene provides fullscreen / exit-fullscreen controls. The top-right Chinese / English button switches navigation, controls, teaching text, validation results, and scene hints without changing mathematical notation or the current experiment state.
 
 ## Run locally
 
@@ -136,6 +136,8 @@ J_i = axis_i × (p_end − p_joint_i)   # all expressed in base
 q_next = q + Δq
 ```
 
+Trajectory planning uses the current joint angles as the start, the IK solution as the goal, and the quintic minimum-jerk time law `s(u)=10u³−15u⁴+6u⁵`. Every sample is evaluated through FK, so the solid glow and fading trail show the end effector's actual spatial path rather than a decorative curve.
+
 ## Project structure
 
 ```text
@@ -147,7 +149,9 @@ src/
 │   ├── transform.ts            # Pose, composition, inverse transforms, point conversion
 │   ├── kinematics.ts           # 3-Link FK
 │   ├── inverseKinematics.ts    # Jacobian / DLS position IK
+│   ├── trajectory.ts           # Minimum-jerk joint trajectory and FK path samples
 │   ├── math.test.ts
+│   ├── trajectory.test.ts
 │   └── signs.test.ts           # Independent analytic sign checks
 ├── components/
 │   ├── CoordinateFrame.tsx     # RGB axes, transparent labels, dragging
@@ -167,7 +171,7 @@ src/
 
 ## Validation and current limits
 
-`npm test` covers six Euler round trips, quaternion / matrix round trips, `q ≡ −q`, `T · inverse(T) ≈ I`, multi-level transform chains, point conversion, FK, analytic Jacobians against finite differences, IK error reduction, constraints, and playback state. Sign tests use explicit sin / cos matrices and known endpoints rather than relying only on self-consistent round trips.
+`npm test` covers six Euler round trips, quaternion / matrix round trips, `q ≡ −q`, `T · inverse(T) ≈ I`, multi-level transform chains, point conversion, FK, analytic Jacobians against finite differences, IK error reduction, minimum-jerk endpoints and FK samples, constraints, and playback state. Sign tests use explicit sin / cos matrices and known endpoints rather than relying only on self-consistent round trips.
 
 The page checks `RᵀR ≈ I`, `det(R) ≈ 1`, unit quaternion norm, and the homogeneous final row in real time, using floating-point tolerances instead of strict equality. A typical validity tolerance is `1e-8`. Display values are rounded; calculations retain full precision.
 

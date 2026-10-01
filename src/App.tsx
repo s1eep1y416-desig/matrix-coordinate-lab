@@ -265,7 +265,12 @@ function FKControls() {
 function IKControls() {
   const language = useLocaleStore((state) => state.language);
   const l = (zh: string, en: string) => localize(language, zh, en);
-  const { robotAngles, setRobotAngle, ikTarget, setIkTargetCoordinate, ikDamping, setIkDamping, stepIK, solveIK, ikIterations } = useLabStore();
+  const {
+    robotAngles, setRobotAngle, ikTarget, setIkTargetCoordinate, ikDamping, setIkDamping, stepIK, solveIK, ikIterations,
+    ikTrajectory, ikTrajectoryDuration, ikTrajectoryProgress, ikTrajectoryPlaying, ikTrajectoryConverged, ikTrajectoryResidual,
+    planIKTrajectory, playIKTrajectory, pauseIKTrajectory, restartIKTrajectory, setIKTrajectoryDuration, setIKTrajectoryProgress,
+  } = useLabStore();
+  const hasTrajectory = ikTrajectory.length > 1;
   return <>
     <section className="control-card"><PaneTitle eyebrow="TARGET IN BASE" title={l('拖动或输入目标点', 'Drag or enter a target')} aside={<span className="subtle-badge">position IK</span>} />
       <div className="three-fields">{labels.map((axis, index) => <NumberField key={axis} label={axis} unit="m" value={ikTarget.getComponent(index)} min={-3.2} max={3.2} onCommit={(value) => setIkTargetCoordinate(index as 0 | 1 | 2, value)} />)}</div>
@@ -277,6 +282,14 @@ function IKControls() {
       <div className="solver-actions"><button onClick={stepIK}>{l('单步迭代', 'Single step')}</button><button className="primary-action" onClick={solveIK}>{l('求解到收敛', 'Solve to convergence')}</button></div>
       <div className="inline-result"><span>{l('累计迭代', 'Iterations')}</span><strong>{ikIterations}</strong></div>
       <p className="fine-print"><Formula tex="\Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" />. {l('阻尼抑制奇异位形附近的关节跳变；线搜索只接受让误差下降的步长。', 'Damping suppresses joint jumps near singularities; line search only accepts steps that reduce error.')}</p>
+    </section>
+    <section className="control-card trajectory-card"><PaneTitle eyebrow="IK TRAJECTORY" title={l('轨迹规划与末端拖影', 'Trajectory planning & trail')} aside={<span className="subtle-badge">minimum jerk</span>} />
+      <div className="trajectory-profile"><span>{l('规划空间', 'Planning space')}</span><strong>{l('关节空间 · 五次 S 曲线', 'Joint space · quintic S-curve')}</strong></div>
+      <div className="slider-row"><strong>t</strong><input aria-label={l('轨迹时长', 'Trajectory duration')} type="range" min="1" max="10" step="0.5" value={ikTrajectoryDuration} onChange={(event) => setIKTrajectoryDuration(Number(event.target.value))} /><NumberField label={l('时长', 'Duration')} unit="s" value={ikTrajectoryDuration} min={1} max={10} onCommit={(value) => { setIKTrajectoryDuration(value); return Math.max(1, Math.min(10, value)); }} /></div>
+      <div className="solver-actions trajectory-actions"><button className="primary-action" onClick={planIKTrajectory}>{l('规划到目标', 'Plan to target')}</button><button disabled={!hasTrajectory} onClick={ikTrajectoryPlaying ? pauseIKTrajectory : playIKTrajectory}>{ikTrajectoryPlaying ? l('暂停', 'Pause') : l('播放', 'Play')}</button><button disabled={!hasTrajectory} onClick={restartIKTrajectory}>{l('回到起点', 'Restart')}</button></div>
+      <input className="trajectory-progress" aria-label={l('轨迹播放进度', 'Trajectory playback progress')} type="range" min="0" max="1" step="0.001" value={ikTrajectoryProgress} disabled={!hasTrajectory} onChange={(event) => setIKTrajectoryProgress(Number(event.target.value))} />
+      {hasTrajectory ? <div className="trajectory-status"><span className={ikTrajectoryConverged ? 'good' : 'warn'}>● {ikTrajectoryConverged ? l('终点已求解', 'Goal solved') : l('使用最近可达解', 'Using closest solution')}</span><span>{Math.round(ikTrajectoryProgress * 100)}%</span><span>{l('终点残差', 'Goal residual')} {formatValue(ikTrajectoryResidual)} m</span></div> : <p className="fine-print">{l('点击“规划到目标”会保留当前姿态作为起点，先求解 IK 终点，再生成 121 个 FK 采样点。', '“Plan to target” keeps the current pose as the start, solves the IK goal, then generates 121 FK samples.')}</p>}
+      <p className="fine-print">{l('金色荧光实线是完整规划路径；更亮的渐隐光迹是末端已经走过的真实 FK 轨迹。拖动进度条可逐点检查。', 'The solid gold glow is the full planned path; the brighter fading trail is the end effector’s travelled FK path. Scrub the progress slider to inspect it.')}</p>
     </section>
     <section className="control-card"><PaneTitle eyebrow="INITIAL / CURRENT q" title={l('关节角', 'Joint angles')} />
       {robotAngles.map((angle, index) => <div className="slider-row" key={index}><strong>q{index + 1}</strong><input aria-label={l(`IK 关节 ${index + 1}`, `IK joint ${index + 1}`)} type="range" min="-180" max="180" value={angle} onChange={(event) => setRobotAngle(index as 0 | 1 | 2, Number(event.target.value))} /><NumberField label={l('角度', 'Angle')} unit="°" value={angle} onCommit={(value) => { setRobotAngle(index as 0 | 1 | 2, value); return Math.max(-180, Math.min(180, value)); }} /></div>)}

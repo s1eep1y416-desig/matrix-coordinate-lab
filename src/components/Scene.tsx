@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Line, OrbitControls } from '@react-three/drei';
 import { MOUSE, Plane, Vector3 } from 'three';
@@ -74,10 +74,30 @@ function FrameScene() {
 }
 
 function IKScene() {
-  const { robotAngles, ikTarget, setIkTarget } = useLabStore();
+  const { robotAngles, ikTarget, setIkTarget, ikTrajectory, ikTrajectoryProgress } = useLabStore();
   const end = forwardKinematics(robotAngles).T_base_tool.position;
+  const completedIndex = Math.min(ikTrajectory.length - 1, Math.floor(ikTrajectoryProgress * Math.max(0, ikTrajectory.length - 1)));
+  const travelled = ikTrajectory.slice(0, completedIndex + 1).map((sample) => sample.position);
+  if (travelled.length && travelled.at(-1)!.distanceTo(end) > 1e-6) travelled.push(end);
+  const trailStart = Math.max(0, travelled.length - 38);
+  const trail = travelled.slice(trailStart);
   return <>
     <Robot angles={robotAngles} step={3} />
+    {ikTrajectory.length > 1 && <>
+      <Line points={ikTrajectory.map((sample) => sample.position)} color="#ffcc52" lineWidth={8} transparent opacity={0.1} depthWrite={false} />
+      <Line points={ikTrajectory.map((sample) => sample.position)} color="#ffd96e" lineWidth={2.2} transparent opacity={0.72} depthWrite={false} />
+    </>}
+    {trail.slice(1).map((point, index) => {
+      const strength = (index + 1) / Math.max(1, trail.length - 1);
+      return <group key={`${trailStart}-${index}`}>
+        <Line points={[trail[index], point]} color="#ffc83d" lineWidth={7 + strength * 5} transparent opacity={0.025 + strength * 0.12} depthWrite={false} />
+        <Line points={[trail[index], point]} color="#fff0a6" lineWidth={1.4 + strength * 3.1} transparent opacity={0.08 + strength * 0.88} depthWrite={false} />
+      </group>;
+    })}
+    {ikTrajectory.length > 1 && <group position={end.toArray()}>
+      <mesh><sphereGeometry args={[0.095, 18, 12]} /><meshBasicMaterial color="#ffd76e" transparent opacity={0.2} depthWrite={false} /></mesh>
+      <mesh><sphereGeometry args={[0.032, 16, 10]} /><meshBasicMaterial color="#fff1b2" /></mesh>
+    </group>}
     <Line points={[end.toArray(), ikTarget.toArray()]} color="#b9ee72" lineWidth={2.5} dashed dashSize={.08} gapSize={.05} />
     <PointMarker point={ikTarget} onMove={setIkTarget} label="IK Target" />
     <mesh position={[0, 0, 0]}><sphereGeometry args={[3.05, 32, 20]} /><meshBasicMaterial color="#89a66b" wireframe transparent opacity={.035} depthWrite={false} /></mesh>
@@ -113,13 +133,41 @@ export function Scene() {
   const robotAngles = useLabStore((state) => state.robotAngles);
   const fkStep = useLabStore((state) => state.fkStep);
   const pinStep = useLabStore((state) => state.pinStep);
+  const ikTrajectoryPlaying = useLabStore((state) => state.ikTrajectoryPlaying);
   const cameraResetKey = useLabStore((state) => state.cameraResetKey);
   const resetCamera = useLabStore((state) => state.resetCamera);
   const sourceId = useLabStore((state) => state.sourceId);
   const targetId = useLabStore((state) => state.targetId);
   const frames = useLabStore((state) => state.frames);
+  const sceneShellRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const frameName = (id: string) => frames.find((frame) => frame.id === id)?.name ?? id;
-  return <div className="scene-shell" aria-label={l('三维机器人学场景', '3D robotics scene')}>
+  useEffect(() => {
+    if (mode !== 'ik' || !ikTrajectoryPlaying) return;
+    let animationFrame = 0;
+    let previous = performance.now();
+    const advance = (now: number) => {
+      const state = useLabStore.getState();
+      state.advanceIKTrajectory(Math.min((now - previous) / 1000, 0.1));
+      previous = now;
+      if (useLabStore.getState().ikTrajectoryPlaying) animationFrame = requestAnimationFrame(advance);
+    };
+    animationFrame = requestAnimationFrame(advance);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [ikTrajectoryPlaying, mode]);
+  useEffect(() => {
+    const updateFullscreen = () => setIsFullscreen(document.fullscreenElement === sceneShellRef.current);
+    document.addEventListener('fullscreenchange', updateFullscreen);
+    return () => document.removeEventListener('fullscreenchange', updateFullscreen);
+  }, []);
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await sceneShellRef.current?.requestFullscreen();
+  };
+  const preventMiddleBrowserGesture = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button === 1) event.preventDefault();
+  };
+  return <div ref={sceneShellRef} className="scene-shell" aria-label={l('三维机器人学场景', '3D robotics scene')} onMouseDownCapture={preventMiddleBrowserGesture} onAuxClick={preventMiddleBrowserGesture}>
     <Canvas camera={{ position: [3.1, -4.2, 3.0], up: [0, 0, 1], fov: 42, near: 0.1, far: 100 }} dpr={[1, 2]} fallback={<div className="webgl-fallback">{l('此浏览器无法启动 3D 场景，数值和矩阵仍可使用。', 'This browser cannot start the 3D scene. Numeric and matrix tools remain available.')}</div>}>
       <color attach="background" args={['#0b0c09']} />
       <WorldGrid />
@@ -131,7 +179,10 @@ export function Scene() {
       <div className="scene-axis-legend" aria-label={l('坐标轴颜色：X 红、Y 绿、Z 蓝', 'Axis colors: X red, Y green, Z blue')}><span className="x">X</span><span className="y">Y</span><span className="z">Z</span></div>
       <div className="scene-route"><span>{l('源', 'Source')}</span><strong>{frameName(sourceId)}</strong><b>→</b><span>{l('目标', 'Target')}</span><strong>{frameName(targetId)}</strong></div>
     </>}
-    <button className="scene-reset-view" onClick={resetCamera}>{l('重置视角', 'Reset view')}</button>
+    <div className="scene-view-actions">
+      <button className="scene-reset-view" onClick={resetCamera}>{l('重置视角', 'Reset view')}</button>
+      <button className="scene-fullscreen" onClick={toggleFullscreen}>{isFullscreen ? l('退出全屏', 'Exit fullscreen') : l('全屏', 'Fullscreen')}</button>
+    </div>
     <div className="scene-overlay"><span className="scene-live">● {l('实时同步', 'Live sync')}</span><span>{mode === 'frames' ? l('中键转视角 · 左键拖动原点 / 彩色轴端 / 点 P · 滚轮缩放', 'Middle drag: orbit · Left drag: origin / axis tip / Point P · Wheel: zoom') : mode === 'ik' ? l('中键转视角 · 左键拖动 Target · 滚轮缩放', 'Middle drag: orbit · Left drag: Target · Wheel: zoom') : l('中键转视角 · 右侧调节参数 · 滚轮缩放', 'Middle drag: orbit · Adjust parameters on the right · Wheel: zoom')}</span></div>
   </div>;
 }

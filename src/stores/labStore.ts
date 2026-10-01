@@ -5,6 +5,7 @@ import { composePoses, identityPose, inversePose, makePose, relativePose, transf
 import type { JointAngles } from '../math/kinematics';
 import type { Axis, RotationPair } from '../math/rotation';
 import { ikStep, solveIK } from '../math/inverseKinematics';
+import { planJointTrajectory, trajectoryAnglesAt, type JointTrajectorySample } from '../math/trajectory';
 
 export type DofKey = 'tx' | 'ty' | 'tz' | 'rx' | 'ry' | 'rz';
 export type LabMode = 'frames' | 'rotation' | 'fk' | 'ik' | 'pinocchio';
@@ -106,6 +107,14 @@ interface LabState {
   ikTarget: Vector3;
   ikDamping: number;
   ikIterations: number;
+  ikTrajectory: JointTrajectorySample[];
+  ikTrajectoryStart: JointAngles;
+  ikTrajectoryGoal: JointAngles;
+  ikTrajectoryDuration: number;
+  ikTrajectoryProgress: number;
+  ikTrajectoryPlaying: boolean;
+  ikTrajectoryConverged: boolean;
+  ikTrajectoryResidual: number;
   pinStep: number;
   cameraResetKey: number;
   setMode: (mode: LabMode) => void;
@@ -141,6 +150,13 @@ interface LabState {
   setIkDamping: (value: number) => void;
   stepIK: () => void;
   solveIK: () => void;
+  planIKTrajectory: () => void;
+  playIKTrajectory: () => void;
+  pauseIKTrajectory: () => void;
+  restartIKTrajectory: () => void;
+  setIKTrajectoryDuration: (seconds: number) => void;
+  setIKTrajectoryProgress: (progress: number) => void;
+  advanceIKTrajectory: (seconds: number) => void;
   setPinStep: (step: number) => void;
   resetCamera: () => void;
   reset: () => void;
@@ -152,9 +168,12 @@ export const useLabStore = create<LabState>((set, get) => ({
   pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45],
   rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', fkStep: 3,
   rotationProgress: 2, rotationPlaying: false, chainStep: 99,
-  ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5,
+  ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0,
+  ikTrajectory: [], ikTrajectoryStart: [25, -30, 45], ikTrajectoryGoal: [25, -30, 45], ikTrajectoryDuration: 4,
+  ikTrajectoryProgress: 0, ikTrajectoryPlaying: false, ikTrajectoryConverged: false, ikTrajectoryResidual: 0,
+  pinStep: 5,
   cameraResetKey: 0,
-  setMode: (mode) => set({ mode, rotationPlaying: false }),
+  setMode: (mode) => set({ mode, rotationPlaying: false, ikTrajectoryPlaying: false }),
   selectFrame: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { selectedFrameId: id, sourceId: id, targetId: state.targetId === id ? 'world' : state.targetId, chainStep: 99 } : {}),
   setSource: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { sourceId: id, selectedFrameId: id, chainStep: 99 } : {}),
   setTarget: (id) => set((state) => state.frames.some((frame) => frame.id === id) ? { targetId: id } : {}),
@@ -256,7 +275,7 @@ export const useLabStore = create<LabState>((set, get) => ({
   setRobotAngle: (axis, value) => set((state) => {
     const robotAngles = [...state.robotAngles] as JointAngles;
     robotAngles[axis] = clamp(value, -180, 180);
-    return { robotAngles, ikIterations: state.mode === 'ik' ? 0 : state.ikIterations };
+    return { robotAngles, ikIterations: state.mode === 'ik' ? 0 : state.ikIterations, ikTrajectory: [], ikTrajectoryProgress: 0, ikTrajectoryPlaying: false };
   }),
   setRotationDemo: (axis, value) => {
     if (!Number.isFinite(value)) return;
@@ -278,20 +297,67 @@ export const useLabStore = create<LabState>((set, get) => ({
   }),
   setChainStep: (step) => { if (Number.isFinite(step)) set({ chainStep: clamp(Math.round(step), 0, 7) }); },
   setFkStep: (fkStep) => set({ fkStep: clamp(Math.round(fkStep), 0, 3) }),
-  setIkTarget: (ikTarget) => set({ ikTarget: ikTarget.clone(), ikIterations: 0 }),
+  setIkTarget: (ikTarget) => set({ ikTarget: ikTarget.clone(), ikIterations: 0, ikTrajectory: [], ikTrajectoryProgress: 0, ikTrajectoryPlaying: false }),
   setIkTargetCoordinate: (axis, value) => {
     if (!Number.isFinite(value)) return 0;
     const ikTarget = get().ikTarget.clone().setComponent(axis, clamp(value, -3.2, 3.2));
-    set({ ikTarget, ikIterations: 0 });
+    set({ ikTarget, ikIterations: 0, ikTrajectory: [], ikTrajectoryProgress: 0, ikTrajectoryPlaying: false });
     return ikTarget.getComponent(axis);
   },
   setIkDamping: (value) => set({ ikDamping: clamp(value, 0.001, 1) }),
-  stepIK: () => set((state) => ({ robotAngles: ikStep(state.robotAngles, state.ikTarget, state.ikDamping).angles, ikIterations: state.ikIterations + 1 })),
+  stepIK: () => set((state) => ({ robotAngles: ikStep(state.robotAngles, state.ikTarget, state.ikDamping).angles, ikIterations: state.ikIterations + 1, ikTrajectory: [], ikTrajectoryProgress: 0, ikTrajectoryPlaying: false })),
   solveIK: () => set((state) => {
     const result = solveIK(state.robotAngles, state.ikTarget, state.ikDamping);
-    return { robotAngles: result.angles, ikIterations: state.ikIterations + result.iterations };
+    return { robotAngles: result.angles, ikIterations: state.ikIterations + result.iterations, ikTrajectory: [], ikTrajectoryProgress: 0, ikTrajectoryPlaying: false };
+  }),
+  planIKTrajectory: () => set((state) => {
+    const start = [...state.robotAngles] as JointAngles;
+    const result = solveIK(start, state.ikTarget, state.ikDamping);
+    const goal = [...result.angles] as JointAngles;
+    return {
+      ikTrajectory: planJointTrajectory(start, goal),
+      ikTrajectoryStart: start,
+      ikTrajectoryGoal: goal,
+      ikTrajectoryProgress: 0,
+      ikTrajectoryPlaying: false,
+      ikTrajectoryConverged: result.converged,
+      ikTrajectoryResidual: result.errorNorm,
+      ikIterations: state.ikIterations + result.iterations,
+    };
+  }),
+  playIKTrajectory: () => set((state) => state.mode === 'ik' && state.ikTrajectory.length > 1 ? {
+    ikTrajectoryPlaying: true,
+    ikTrajectoryProgress: state.ikTrajectoryProgress >= 1 ? 0 : state.ikTrajectoryProgress,
+    robotAngles: state.ikTrajectoryProgress >= 1 ? [...state.ikTrajectoryStart] as JointAngles : state.robotAngles,
+  } : {}),
+  pauseIKTrajectory: () => set({ ikTrajectoryPlaying: false }),
+  restartIKTrajectory: () => set((state) => state.ikTrajectory.length > 1 ? {
+    robotAngles: [...state.ikTrajectoryStart] as JointAngles,
+    ikTrajectoryProgress: 0,
+    ikTrajectoryPlaying: false,
+  } : {}),
+  setIKTrajectoryDuration: (seconds) => {
+    if (Number.isFinite(seconds)) set({ ikTrajectoryDuration: clamp(seconds, 1, 10) });
+  },
+  setIKTrajectoryProgress: (progress) => set((state) => {
+    if (!Number.isFinite(progress) || state.ikTrajectory.length < 2) return {};
+    const next = clamp(progress, 0, 1);
+    return {
+      robotAngles: trajectoryAnglesAt(state.ikTrajectoryStart, state.ikTrajectoryGoal, next),
+      ikTrajectoryProgress: next,
+      ikTrajectoryPlaying: false,
+    };
+  }),
+  advanceIKTrajectory: (seconds) => set((state) => {
+    if (!state.ikTrajectoryPlaying || state.mode !== 'ik' || !Number.isFinite(seconds) || seconds <= 0) return {};
+    const next = Math.min(1, state.ikTrajectoryProgress + seconds / state.ikTrajectoryDuration);
+    return {
+      robotAngles: trajectoryAnglesAt(state.ikTrajectoryStart, state.ikTrajectoryGoal, next),
+      ikTrajectoryProgress: next,
+      ikTrajectoryPlaying: next < 1,
+    };
   }),
   setPinStep: (pinStep) => set({ pinStep: clamp(Math.round(pinStep), 0, 5) }),
   resetCamera: () => set((state) => ({ cameraResetKey: state.cameraResetKey + 1 })),
-  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', rotationProgress: 2, rotationPlaying: false, chainStep: 99, fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
+  reset: () => set((state) => ({ mode: 'frames', frames: [world(), frameA()], nextFrameNumber: 2, selectedFrameId: 'A', sourceId: 'A', targetId: 'world', eulerOrder: 'ZYX', eulerOrderBehavior: 'pose', pointWorld: initialPoint(), pointReference: 'world', robotAngles: [25, -30, 45], rotationX: 45, rotationY: 35, rotationZ: 30, rotationPair: 'XY', rotationSense: 'active', rotationProgress: 2, rotationPlaying: false, chainStep: 99, fkStep: 3, ikTarget: new Vector3(1.9, 0.8, 0.7), ikDamping: 0.08, ikIterations: 0, ikTrajectory: [], ikTrajectoryStart: [25, -30, 45], ikTrajectoryGoal: [25, -30, 45], ikTrajectoryDuration: 4, ikTrajectoryProgress: 0, ikTrajectoryPlaying: false, ikTrajectoryConverged: false, ikTrajectoryResidual: 0, pinStep: 5, cameraResetKey: state.cameraResetKey + 1 })),
 }));
