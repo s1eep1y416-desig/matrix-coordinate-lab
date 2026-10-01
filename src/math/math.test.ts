@@ -3,7 +3,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three';
 import { EULER_ORDERS, eulerFromQuaternion, quaternionFromEuler } from './euler';
 import { axisAngleFromQuaternion, quaternionFromAxisAngle, sameOrientation } from './quaternion';
 import { forwardKinematics, LINK_LENGTHS } from './kinematics';
-import { finiteDifferenceJacobian, ikStep, positionJacobian, solveIK } from './inverseKinematics';
+import { analyticPositionIKSolutions, finiteDifferenceJacobian, ikStep, isPositionReachable, positionJacobian, solveIK } from './inverseKinematics';
 import { compareRotationOrder, rotationAbout, rotationMatrix, rotationProduct, validateRotation, validateRotationMatrix, type RotationPair } from './rotation';
 import { composePoses, identityPose, inversePose, inverseTransformPoint, makePose, matrixMaxError, matrixRows, poseMatrix, relativePose, transformPoint, validateHomogeneous } from './transform';
 
@@ -150,5 +150,18 @@ describe('damped least-squares inverse kinematics', () => {
     const result = solveIK([0, -10, 10], target, 0.06);
     expect(result.converged).toBe(true);
     expect(target.distanceTo(forwardKinematics(result.angles).T_base_tool.position)).toBeLessThan(1e-4);
+  });
+
+  it('crosses the ±180° base-joint boundary for the reported negative-Z target', () => {
+    const target = new Vector3(-2.34845, -0.280021, -1.24018);
+    const result = solveIK([25, -30, 45], target, 0.08);
+    expect(result.geometricallyReachable).toBe(true);
+    expect(result.converged).toBe(true);
+    expect(target.distanceTo(forwardKinematics(result.angles).T_base_tool.position)).toBeLessThan(1e-4);
+  });
+
+  it('distinguishes the exact workspace from the outer reach sphere', () => {
+    expect(isPositionReachable(new Vector3(1.25, 0, 0))).toBe(false);
+    expect(analyticPositionIKSolutions(new Vector3(1.25, 0, -0.2)).length).toBeGreaterThan(0);
   });
 });

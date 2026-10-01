@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { forwardKinematics, type JointAngles } from './kinematics';
+import { forwardKinematics, LINK_LENGTHS, wrapDegrees, type JointAngles } from './kinematics';
 import { rotationAbout } from './rotation';
 
 export type Jacobian3 = [
@@ -23,10 +23,48 @@ export interface IKSolveResult {
   converged: boolean;
   iterations: number;
   errorNorm: number;
+  geometricallyReachable: boolean;
+  usedAnalyticFallback: boolean;
 }
 
 const degrees = (value: number) => value * 180 / Math.PI;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+/** Closed-form position solutions for this lab's Z-Y-Y chain, including both base-yaw and elbow branches. */
+export function analyticPositionIKSolutions(target: Vector3, tolerance = 1e-9): JointAngles[] {
+  const [link1, link2, link3] = LINK_LENGTHS;
+  const radial = Math.hypot(target.x, target.y);
+  const azimuth = degrees(Math.atan2(target.y, target.x));
+  const vertical = -target.z;
+  const solutions: JointAngles[] = [];
+
+  for (const radialSign of [1, -1] as const) {
+    const planarTarget = radialSign * radial;
+    const dx = planarTarget - link1;
+    const distanceSquared = dx * dx + vertical * vertical;
+    const cosineJoint3 = (distanceSquared - link2 * link2 - link3 * link3) / (2 * link2 * link3);
+    if (cosineJoint3 < -1 - tolerance || cosineJoint3 > 1 + tolerance) continue;
+    const joint3Magnitude = Math.acos(clamp(cosineJoint3, -1, 1));
+    for (const elbowSign of [1, -1] as const) {
+      const joint3 = elbowSign * joint3Magnitude;
+      const joint2 = Math.atan2(vertical, dx) - Math.atan2(link3 * Math.sin(joint3), link2 + link3 * Math.cos(joint3));
+      const angles: JointAngles = [
+        wrapDegrees(azimuth + (radialSign < 0 ? 180 : 0)),
+        wrapDegrees(degrees(joint2)),
+        wrapDegrees(degrees(joint3)),
+      ];
+      if (target.distanceTo(forwardKinematics(angles).T_base_tool.position) <= 1e-7
+        && !solutions.some((existing) => existing.every((angle, index) => Math.abs(wrapDegrees(angle - angles[index])) < 1e-7))) {
+        solutions.push(angles);
+      }
+    }
+  }
+  return solutions;
+}
+
+export function isPositionReachable(target: Vector3): boolean {
+  return analyticPositionIKSolutions(target).length > 0;
+}
 
 /** Position Jacobian for the lab's Z-Y-Y revolute chain, expressed in base coordinates. */
 export function positionJacobian(angles: JointAngles): Jacobian3 {
@@ -82,7 +120,10 @@ export function ikStep(angles: JointAngles, target: Vector3, damping = 0.08, max
   let next = angles;
   let nextError = error.length();
   while (scale >= 1 / 64) {
-    const candidate = angles.map((angle, index) => clamp(angle + degrees(limited[index] * scale), -180, 180)) as JointAngles;
+    const candidate = angles.map((angle, index) => {
+      const next = angle + degrees(limited[index] * scale);
+      return index === 0 ? wrapDegrees(next) : clamp(next, -180, 180);
+    }) as JointAngles;
     const candidateError = target.distanceTo(forwardKinematics(candidate).T_base_tool.position);
     if (candidateError < nextError) { next = candidate; nextError = candidateError; break; }
     scale *= 0.5;
@@ -98,7 +139,7 @@ export function ikStep(angles: JointAngles, target: Vector3, damping = 0.08, max
   };
 }
 
-export function solveIK(initial: JointAngles, target: Vector3, damping = 0.08, maxIterations = 240, tolerance = 1e-4): IKSolveResult {
+function solveFromSeed(initial: JointAngles, target: Vector3, damping: number, maxIterations: number, tolerance: number): Omit<IKSolveResult, 'geometricallyReachable' | 'usedAnalyticFallback'> {
   let angles = [...initial] as JointAngles;
   let errorNorm = target.distanceTo(forwardKinematics(angles).T_base_tool.position);
   let iterations = 0;
@@ -110,6 +151,27 @@ export function solveIK(initial: JointAngles, target: Vector3, damping = 0.08, m
     errorNorm = result.nextErrorNorm;
   }
   return { angles, converged: errorNorm <= tolerance, iterations, errorNorm };
+}
+
+function distanceFromSeed(seed: JointAngles, candidate: JointAngles): number {
+  return Math.hypot(wrapDegrees(candidate[0] - seed[0]), candidate[1] - seed[1], candidate[2] - seed[2]);
+}
+
+export function solveIK(initial: JointAngles, target: Vector3, damping = 0.08, maxIterations = 240, tolerance = 1e-4): IKSolveResult {
+  const analyticSolutions = analyticPositionIKSolutions(target);
+  const primary = solveFromSeed(initial, target, damping, maxIterations, tolerance);
+  if (primary.converged) return { ...primary, geometricallyReachable: true, usedAnalyticFallback: false };
+  if (!analyticSolutions.length) return { ...primary, geometricallyReachable: false, usedAnalyticFallback: false };
+
+  // DLS is local. If it stalls at a singularity or joint boundary, restart from the closest exact geometric branch.
+  const seed = [...analyticSolutions].sort((a, b) => distanceFromSeed(initial, a) - distanceFromSeed(initial, b))[0];
+  const fallback = solveFromSeed(seed, target, damping, maxIterations, tolerance);
+  return {
+    ...fallback,
+    iterations: primary.iterations + fallback.iterations,
+    geometricallyReachable: true,
+    usedAnalyticFallback: true,
+  };
 }
 
 export function jacobianManipulability(jacobian: Jacobian3): number {

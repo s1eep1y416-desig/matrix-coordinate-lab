@@ -32,4 +32,10 @@ describe('joint-space trajectory planning', () => {
       expect(sample.position.distanceTo(expected)).toBeLessThan(1e-12);
     }
   });
+
+  it('takes the short periodic route across the base-joint branch cut', () => {
+    const halfway = trajectoryAnglesAt([170, 0, 0], [-170, 0, 0], 0.5);
+    expect(Math.abs(halfway[0])).toBeCloseTo(180, 10);
+    expect(trajectoryAnglesAt([170, 0, 0], [-170, 0, 0], 1)[0]).toBeCloseTo(-170, 10);
+  });
 });

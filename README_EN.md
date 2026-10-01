@@ -16,7 +16,7 @@ Connect matrix calculations with spatial motion by dragging coordinate frames an
 | Active / passive rotation | Rotate the gold vector in active mode; keep the world vector fixed and inspect its rotating-frame coordinates in passive mode. |
 | Rotation representations | Six Euler orders, ZYX / RPY, quaternion, and Axis-Angle; preserve either pose or angle values when changing order; detect gimbal lock. |
 | 3-Link FK | Z-Y-Y teaching skeleton, end-effector position and orientation, and step-by-step matrix-chain playback. |
-| Position IK and trajectories | Analytic position Jacobian, damped least squares, descent line search, single-step iteration, automatic solve, and a draggable target; quintic minimum-jerk joint trajectories, scrubbing, playback controls, and a glowing end-effector trail. |
+| Position IK and trajectories | Analytic position Jacobian, damped least squares, descent line search, periodic base-joint wrapping across ±180°, analytic-branch recovery, and full-workspace reachability; draggable target, quintic minimum-jerk trajectories, scrubbing, playback controls, and a glowing end-effector trail. |
 | Pinocchio workflow | Explain URDF → Model → q → FK → Frame placements with the same teaching skeleton. This is not a live Pinocchio runtime. |
 
 The interface uses a white-and-green control area and a black-and-gold 3D scene. Axes follow the standard colors: X red, Y green, Z blue. Middle-button dragging orbits the 3D view, and the scene provides fullscreen / exit-fullscreen controls. The top-right Chinese / English button switches navigation, controls, teaching text, validation results, and scene hints without changing mathematical notation or the current experiment state.
@@ -135,6 +135,8 @@ J_i = axis_i × (p_end − p_joint_i)   # all expressed in base
 Δq = Jᵀ (J Jᵀ + λ² I)⁻¹ e
 q_next = q + Δq
 ```
+
+`q1` is a periodic base joint and uses equivalent-angle wrapping across `+180° / −180°`. If local DLS still stalls near a singularity or boundary, the solver resumes from the closest analytic Z-Y-Y branch. Reachability uses the full 3-Link workspace rather than only the maximum-reach sphere.
 
 Trajectory planning uses the current joint angles as the start, the IK solution as the goal, and the quintic minimum-jerk time law `s(u)=10u³−15u⁴+6u⁵`. Every sample is evaluated through FK, so the solid glow and fading trail show the end effector's actual spatial path rather than a decorative curve.
 

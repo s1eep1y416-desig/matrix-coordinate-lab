@@ -5,6 +5,12 @@ import { composePoses, identityPose, makePose, type Pose } from './transform';
 export const LINK_LENGTHS = [1.25, 1.0, 0.8] as const;
 export type JointAngles = [number, number, number];
 
+/** Normalize a periodic revolute-joint angle to [-180°, 180°). */
+export function wrapDegrees(angle: number): number {
+  if (!Number.isFinite(angle)) return angle;
+  return ((angle + 180) % 360 + 360) % 360 - 180;
+}
+
 export interface FKResult {
   T_base_link1: Pose;
   T_link1_link2: Pose;

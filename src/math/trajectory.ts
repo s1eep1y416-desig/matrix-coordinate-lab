@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { forwardKinematics, type JointAngles } from './kinematics';
+import { forwardKinematics, wrapDegrees, type JointAngles } from './kinematics';
 
 export interface JointTrajectorySample {
   progress: number;
@@ -18,7 +18,11 @@ export function minimumJerkBlend(progress: number): number {
 /** Interpolate the three joint angles using the shared minimum-jerk time law. */
 export function trajectoryAnglesAt(start: JointAngles, goal: JointAngles, progress: number): JointAngles {
   const blend = minimumJerkBlend(progress);
-  return start.map((angle, index) => angle + (goal[index] - angle) * blend) as JointAngles;
+  return start.map((angle, index) => {
+    const delta = index === 0 ? wrapDegrees(goal[index] - angle) : goal[index] - angle;
+    const interpolated = angle + delta * blend;
+    return index === 0 ? wrapDegrees(interpolated) : interpolated;
+  }) as JointAngles;
 }
 
 /** Sample a joint-space trajectory and its actual end-effector path through FK. */

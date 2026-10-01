@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { EULER_ORDERS, eulerFromQuaternion, isNearGimbalLock, type EulerOrder } from './math/euler';
 import { forwardKinematics } from './math/kinematics';
-import { jacobianManipulability, positionJacobian } from './math/inverseKinematics';
+import { isPositionReachable, jacobianManipulability, positionJacobian } from './math/inverseKinematics';
 import { axisAngleFromQuaternion } from './math/quaternion';
 import { compareRotationOrder, evaluateRotationVector, ROTATION_DEMO_VECTOR, rotationAbout, rotationMatrix, validateRotation, type Axis, type RotationPair } from './math/rotation';
 import { inversePose, inverseTransformPoint, matrixMaxError, poseMatrix, transformPoint, validateHomogeneous } from './math/transform';
@@ -275,13 +275,13 @@ function IKControls() {
     <section className="control-card"><PaneTitle eyebrow="TARGET IN BASE" title={l('拖动或输入目标点', 'Drag or enter a target')} aside={<span className="subtle-badge">position IK</span>} />
       <div className="three-fields">{labels.map((axis, index) => <NumberField key={axis} label={axis} unit="m" value={ikTarget.getComponent(index)} min={-3.2} max={3.2} onCommit={(value) => setIkTargetCoordinate(index as 0 | 1 | 2, value)} />)}</div>
       <div className="preset-row"><button onClick={() => useLabStore.getState().setIkTarget(new Vector3(1.9, .8, .7))}>{l('目标 A', 'Target A')}</button><button onClick={() => useLabStore.getState().setIkTarget(new Vector3(1.25, -1.1, -.55))}>{l('目标 B', 'Target B')}</button><button onClick={() => useLabStore.getState().setIkTarget(new Vector3(3.4, 0, 0))}>{l('不可达点', 'Unreachable')}</button></div>
-      <p className="fine-print">{l('左键可直接拖动绿色 Target；球壳外的目标无法收敛，用于观察残差和可达性。', 'Drag the green Target with the left button. Targets outside the shell cannot converge, which demonstrates residual error and reachability.')}</p>
+      <p className="fine-print">{l('左键可直接拖动绿色 Target；系统会检查完整 3-Link 工作空间，而不只判断是否在最大臂展球内。', 'Drag the green Target with the left button. The full 3-Link workspace is checked, not only the maximum-reach sphere.')}</p>
     </section>
     <section className="control-card"><PaneTitle eyebrow="DAMPED LEAST SQUARES" title={l('Jacobian 迭代', 'Jacobian iteration')} />
       <div className="slider-row"><strong>λ</strong><input aria-label={l('阻尼系数', 'Damping coefficient')} type="range" min="0.001" max="0.5" step="0.001" value={ikDamping} onChange={(event) => setIkDamping(Number(event.target.value))} /><NumberField label={l('阻尼', 'Damping')} value={ikDamping} onCommit={(value) => { setIkDamping(value); return Math.max(.001, Math.min(1, value)); }} /></div>
       <div className="solver-actions"><button onClick={stepIK}>{l('单步迭代', 'Single step')}</button><button className="primary-action" onClick={solveIK}>{l('求解到收敛', 'Solve to convergence')}</button></div>
       <div className="inline-result"><span>{l('累计迭代', 'Iterations')}</span><strong>{ikIterations}</strong></div>
-      <p className="fine-print"><Formula tex="\Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" />. {l('阻尼抑制奇异位形附近的关节跳变；线搜索只接受让误差下降的步长。', 'Damping suppresses joint jumps near singularities; line search only accepts steps that reduce error.')}</p>
+      <p className="fine-print"><Formula tex="\Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" />. {l('阻尼抑制奇异位形附近的关节跳变；q1 跨越 ±180° 时连续环绕，局部迭代停滞时使用最近的解析分支继续求解。', 'Damping suppresses joint jumps near singularities. q1 wraps continuously across ±180°, and a nearest analytic branch recovers a stalled local iteration.')}</p>
     </section>
     <section className="control-card trajectory-card"><PaneTitle eyebrow="IK TRAJECTORY" title={l('轨迹规划与末端拖影', 'Trajectory planning & trail')} aside={<span className="subtle-badge">minimum jerk</span>} />
       <div className="trajectory-profile"><span>{l('规划空间', 'Planning space')}</span><strong>{l('关节空间 · 五次 S 曲线', 'Joint space · quintic S-curve')}</strong></div>
@@ -335,14 +335,14 @@ function IKResults() {
   const jacobian = positionJacobian(robotAngles);
   const error = ikTarget.clone().sub(fk.T_base_tool.position);
   const errorNorm = error.length();
-  const reachable = ikTarget.length() <= 3.05 + 1e-8;
+  const reachable = isPositionReachable(ikTarget);
   const manipulability = jacobianManipulability(jacobian);
   const converged = errorNorm < 1e-3;
   return <div className="results-stack">
     <div className="result-intro"><span className="eyebrow">INVERSE KINEMATICS · POSITION</span><h2>{l('目标位置 → 关节角', 'Target position → joint angles')}</h2><p>{l('当前是教学用 3 关节运动学骨架。绿色点是目标，金色线是当前解；误差线会随每次 Jacobian 迭代缩短。', 'This is a teaching 3-joint kinematic skeleton. The green point is the target, the gold chain is the current solution, and the error line shortens with each Jacobian iteration.')}</p></div>
     <div className="equation-strip"><Formula tex="e=p_{target}-p(q),\quad \Delta q=J^T(JJ^T+\lambda^2I)^{-1}e" /><span>DLS + {l('下降线搜索', 'descent line search')}</span></div>
     <div className="readout-grid"><VectorReadout label={l('目标位置 · m', 'Target position · m')} values={ikTarget.toArray()} /><VectorReadout label={l('当前末端 · m', 'Current end effector · m')} values={fk.T_base_tool.position.toArray()} /><VectorReadout label="Cartesian error · m" values={error.toArray()} /><VectorReadout label={l('当前关节角 · °', 'Current joint angles · °')} values={robotAngles} unit="°" /></div>
-    <div className="validation-line"><span className={converged ? 'good' : 'warn'}>● {converged ? l('已收敛', 'Converged') : reachable ? l('等待迭代', 'Awaiting iteration') : l('目标超出最大臂展', 'Target exceeds maximum reach')}</span><span>‖e‖ = {formatValue(errorNorm)} m</span><span>|det(J)| = {formatValue(manipulability)}</span><span>{l('迭代', 'Iterations')} {ikIterations}</span></div>
+    <div className="validation-line"><span className={converged ? 'good' : 'warn'}>● {converged ? l('已收敛', 'Converged') : reachable ? l('几何可达 · 等待迭代', 'Geometrically reachable · awaiting iteration') : l('目标不在完整工作空间内', 'Target is outside the full workspace')}</span><span>‖e‖ = {formatValue(errorNorm)} m</span><span>|det(J)| = {formatValue(manipulability)}</span><span>{l('迭代', 'Iterations')} {ikIterations}</span></div>
     <div className="matrix-layout"><MatrixView matrix={matrixFromJacobian(jacobian)} size={3} label="J_v(q)" /><MatrixView matrix={poseMatrix(fk.T_base_tool)} label="{}^{base}T_{tool}(q)" /></div>
     <div className="teaching-band"><strong>{l('为什么这里只有位置 IK？', 'Why position-only IK?')}</strong><span>{l('3 个关节只有 3 个自由度，因此用 3×3 的位置 Jacobian 匹配 x/y/z。完整位姿 IK 需要更多自由度，并可通过', 'Three joints provide only three degrees of freedom, so a 3×3 position Jacobian matches x/y/z. Full-pose IK needs more degrees of freedom and can use')} <Formula tex="\log_6(T_{current}^{-1}T_{target})" /> {l('构造旋转 + 平移的 6D SE(3) 误差。', 'to construct a 6D SE(3) rotation + translation error.')}</span></div>
   </div>;
